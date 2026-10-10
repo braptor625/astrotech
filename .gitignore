@@ -1,0 +1,7 @@
+node_modules/
+dist/
+steam/game/
+steam/release/
+shots/
+__pycache__/
+*.blend1

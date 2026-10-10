@@ -1,0 +1,59 @@
+<title>AstroTech</title>
+<meta name="description" content="AstroTech: a pixel-art incremental game about a mining company that consumes the universe.">
+<style>/*STYLE*/</style>
+<div id="app">
+  <header class="topbar panel">
+    <div class="brand"><img id="brand-ico" class="ico xl pixel" alt=""><div><h1>ASTROTECH</h1><span>MINING CO. · EST. 2187</span></div></div>
+    <div class="chips">
+      <div class="chip slot money" data-tip="money"><img class="ico pixel" data-ico="money" alt=""><b id="st-money">$0</b><span class="sub" id="st-income"></span></div>
+      <div class="chip slot eq" id="chip-eq" data-tip="equity" hidden><img class="ico pixel" data-ico="company" alt=""><b id="st-equity"></b></div>
+      <div class="chip slot rp" id="chip-rp" data-tip="rp" hidden><img class="ico pixel" data-ico="rp" alt=""><b id="st-rp"></b></div>
+      <div class="chip slot rep" id="chip-rep" data-tip="rep" hidden><img class="ico pixel" data-ico="contract" alt=""><b id="st-rep"></b></div>
+      <div id="st-layers" style="display:contents"></div>
+      <span class="challenge-tag" id="challenge-tag" hidden></span>
+    </div>
+    <div class="topbtns">
+      <button class="btn" id="btn-sound" data-act="sound-top" data-tip="txt:Sound on or off" aria-label="Toggle sound"></button>
+      <button class="btn" data-act="tab" data-arg="archive" data-tip="txt:Archive: directives, artifacts, achievements and settings" aria-label="Archive and settings"><img class="ico pixel" data-ico="stats" alt=""></button>
+    </div>
+  </header>
+  <main>
+    <section class="left">
+      <div class="viewport panel">
+        <div class="vbar" id="vbar">
+          <button class="btn tiny on" data-act="view" data-arg="map">SYSTEM MAP</button>
+          <button class="btn tiny" data-act="view" data-arg="launch">LAUNCH COMPLEX</button>
+          <button class="btn tiny" data-act="view" data-arg="target">CLOSE-UP</button>
+          <span class="vregs" id="vregs"></span>
+        </div>
+        <div class="scene-wrap scan">
+          <canvas id="scene" aria-label="Main viewport. On the system map, click a target to plan a mission."></canvas>
+          <div id="cardbox" hidden></div>
+          <div class="strike-banner" id="strike" hidden>CREW ON STRIKE</div>
+        </div>
+        <div class="ticker" id="ticker"></div>
+        <div class="directive" id="directive"></div>
+      </div>
+      <div class="lower panel">
+        <div class="lowtabs"><button class="btn tiny active" data-act="low" data-arg="flights" id="lt-flights">FLIGHTS</button><button class="btn tiny" data-act="low" data-arg="log" id="lt-log">MISSION LOG<span class="dot"></span></button></div>
+        <div id="lowbody" aria-live="polite"></div>
+      </div>
+    </section>
+    <section class="right panel">
+      <nav class="tabs" id="tabs"></nav>
+      <div class="tabbody" id="tabbody"></div>
+    </section>
+  </main>
+</div>
+<div id="tooltip" hidden></div>
+<div id="toasts"></div>
+<div id="modal" hidden></div>
+<script>/*SCRIPTS*/</script>
+<script>
+(function () {
+  function start(data) { AT.ui.start(data || {}); }
+  var hot = window.claude && window.claude.hot;
+  function go() { if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {}); }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(go, go); else go();
+})();
+</script>

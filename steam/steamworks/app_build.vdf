@@ -1,0 +1,12 @@
+"AppBuild"
+{
+	"AppID" "480" // <- replace with your App ID
+	"Desc" "AstroTech build"
+	"ContentRoot" "../release/"
+	"BuildOutput" "./output/"
+	"Depots"
+	{
+		"481" "depot_windows.vdf" // <- replace with your Windows depot ID (usually AppID + 1)
+		"482" "depot_linux.vdf"   // <- replace with your Linux depot ID
+	}
+}

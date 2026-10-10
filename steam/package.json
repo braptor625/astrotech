@@ -1,0 +1,76 @@
+{
+  "name": "astrotech",
+  "productName": "AstroTech",
+  "version": "0.1.0",
+  "description": "AstroTech: a pixel-art incremental game about a mining company that consumes the universe.",
+  "main": "main.js",
+  "author": "Brian",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win --x64",
+    "dist:linux": "electron-builder --linux --x64",
+    "dist:mac": "electron-builder --mac --universal",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "steamworks.js": "^0.4.0"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.0"
+  },
+  "build": {
+    "appId": "com.astrotech.game",
+    "productName": "AstroTech",
+    "files": [
+      "main.js",
+      "preload.js",
+      "game/**/*",
+      "package.json",
+      "steam_appid.txt"
+    ],
+    "asarUnpack": [
+      "node_modules/steamworks.js/dist/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Game"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.games"
+    }
+  }
+}
