@@ -478,6 +478,8 @@
     }
     ship.cond = Math.max(0, ship.cond - m.wear);
     ship.missions++;
+    if (ship.cond < 0.6 && !ship.wornWarned && !M.flags.autorepair) { ship.wornWarned = true; E.log(`${ship.name} is down to ${Math.round(ship.cond * 100)}% hull. Worn hulls fail more often. Repair it in the Fleet console.`, 'warn'); }
+    if (ship.cond >= 0.85) ship.wornWarned = false;
     ship.state = 'idle';
     S.run.missions++; S.stats.missions++;
     if (m.outcome === 'ok') S.run.clean++; else S.run.clean = 0;
@@ -1341,6 +1343,9 @@
     S.targets.push(E.genTarget(0, 'C', { dist: 11 }));
     S.targets.push(E.genTarget(0, 'M', { dist: 20 }));
     for (let r = 1; r <= S.region; r++) S.targets.push(E.genTarget(r));
+    // open on the safe, surveyed prospect so the first launch is not a coin flip
+    const safe = S.targets.find((t) => t.surveyed && !t.story);
+    if (safe && !S.selTarget) S.selTarget = safe.id;
     checkExpeditions();
     E.touch();
   }

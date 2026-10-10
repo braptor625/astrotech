@@ -66,9 +66,11 @@
     return null;
   }
   function renderTabs() {
-    const S = E.S, hint = directiveTab();
+    const S = E.S, dtab = directiveTab();
+    const worn = !E.mults().flags.autorepair && S.ships.some((x) => x.state === 'idle' && x.cond < 0.6);
+    const hintOn = (id) => id === dtab || (worn && id === 'fleet');
     const html = TABS.filter((t) => S.reveal[t.id]).map((t) =>
-      `<button class="btn tab ${t.id === tab ? 'active' : ''} ${S.reveal['new_' + t.id] ? 'new' : ''} ${hint === t.id && t.id !== tab ? 'hint' : ''}" data-act="tab" data-arg="${t.id}"><img src="${SPR.icon(t.icon)}" alt="" class="pixel">${t.label}<span class="dot"></span></button>`).join('');
+      `<button class="btn tab ${t.id === tab ? 'active' : ''} ${S.reveal['new_' + t.id] ? 'new' : ''} ${hintOn(t.id) && t.id !== tab ? 'hint' : ''}" data-act="tab" data-arg="${t.id}"><img src="${SPR.icon(t.icon)}" alt="" class="pixel">${t.label}<span class="dot"></span></button>`).join('');
     const nav = $('#tabs');
     if (nav._html !== html) { nav.innerHTML = html; nav._html = html; }
   }
