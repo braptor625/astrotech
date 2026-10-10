@@ -1,5 +1,5 @@
 # Headless play-test v2: loads the standalone build, plays the opening, screenshots every console.
-import sys, pathlib, json
+import sys, os, pathlib, json
 from playwright.sync_api import sync_playwright
 root = pathlib.Path(__file__).resolve().parent.parent
 out = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/claude-0/shots'); out.mkdir(parents=True, exist_ok=True)
@@ -7,7 +7,8 @@ url = (root / 'steam/game/index.html').as_uri()
 errors = []
 W = int(sys.argv[2]) if len(sys.argv) > 2 else 1366
 with sync_playwright() as p:
-    b = p.chromium.launch()
+    exe = os.environ.get('CHROMIUM_PATH') or ('/opt/pw-browsers/chromium' if pathlib.Path('/opt/pw-browsers/chromium').exists() else None)
+    b = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
     pg = b.new_page(viewport={'width': W, 'height': 800})
     pg.on('console', lambda m: errors.append(f'{m.type}: {m.text}') if m.type in ('error',) else None)
     pg.on('pageerror', lambda e: errors.append(f'pageerror: {e}'))
