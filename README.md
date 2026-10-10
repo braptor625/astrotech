@@ -22,6 +22,8 @@ Oort Cloud → the stars → other galaxies. Fully mouse-playable.
 | `tools/shot.py` | Headless browser play-test with screenshots (needs Python Playwright) |
 | `dist/web/astrotech.html` | Browser build |
 | `steam/` | Electron + Steamworks wrapper. See `steam/README.md` |
+| `art/blender/` | Blender pipeline: headless store-art renders + Blender MCP setup. See `art/blender/README.md` |
+| `art/store/` | Rendered Steam capsules / library art |
 
 ## Build
 
