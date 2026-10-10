@@ -510,8 +510,8 @@
         { n: 5,  text: 'Observatory starts at level 3.', fx: { startObs: 3 } },
         { n: 8,  text: 'Start every run with Fleet Coordination AI.', fx: { startFleetAI: 1 } },
         { n: 12, text: 'Procurement AI: pads, ships and fleet upgrades can be bought automatically.', fx: { autobuy: 1 } },
-        { n: 15, text: 'Keep Board Automation and Guidance research.', fx: { keepBiz: 1 } },
         { n: 12, text: 'Cold Chain: everything sells for 1.3x.', fx: { all: 1.3 } },
+        { n: 15, text: 'Keep Board Automation and Guidance research.', fx: { keepBiz: 1 } },
         { n: 30, text: 'Projects stay completed through Kuiper Jumps.', fx: { keepProjects0: 1 } },
         { n: 60, text: 'Cryo Core gains x2.', fx: { gain0: 2 } },
       ],
@@ -542,8 +542,8 @@
         { n: 2,  text: 'Keep Kuiper research on every reset.', fx: { keepResearch1: 1 } },
         { n: 3,  text: 'Oort challenges unlocked.', fx: { challenges1: 1 } },
         { n: 5,  text: 'Start every run with an Icebreaker.', fx: { startIce: 1 } },
+        { n: 9,  text: 'Shard Exchange: gains x1.6.', fx: { gain1: 1.6 } },
         { n: 10, text: 'Kuiper Jump milestones count as completed.', fx: { allMilestones0: 1 } },
-        { n: 9, text: 'Shard Exchange: gains x1.6.', fx: { gain1: 1.6 } },
         { n: 25, text: 'Comet Shard gains x2.', fx: { gain1: 2 } },
       ],
       challenges: [
@@ -589,9 +589,9 @@
       ],
       milestones: [
         { n: 1, text: 'Galaxies appear as targets in every run.', fx: {} },
+        { n: 1, text: 'Dark Ledger: gains x3.', fx: { gain3: 3 } },
         { n: 2, text: 'Void challenges unlocked.', fx: { challenges3: 1 } },
         { n: 3, text: 'Stellar Ignition milestones count as completed.', fx: { allMilestones2: 1 } },
-        { n: 1, text: 'Dark Ledger: gains x3.', fx: { gain3: 3 } },
         { n: 10, text: 'Dark Matter gains x2.', fx: { gain3: 2 } },
       ],
       challenges: [
