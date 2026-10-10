@@ -28,7 +28,16 @@ Oort Cloud → the stars → other galaxies. Fully mouse-playable.
 ```bash
 node tools/build.mjs        # refresh dist/web and steam/game
 node tools/sim.js 16        # check pacing after changing numbers in data.js
+node tools/build.mjs --demo # demo build only: dist/demo/astrotech-demo.html
+python3 tools/shot_demo.py /tmp/claude-0/shots-demo   # headless demo test, screenshots the end-of-demo screen
 ```
+
+**Demo build.** `--demo` injects `AT.DEMO = true` ahead of all other scripts and writes only
+`dist/demo/astrotech-demo.html` (the web and Steam builds are untouched). In demo mode the header shows a DEMO tag,
+saves use their own key (`astrotech.demo.save.v2`), and the first Kuiper Jump is blocked: attempting it, or loading a
+save that already did it, shows the end-of-demo screen (stats, wishlist button, "keep playing this run"). Set the
+store link via `STEAM_URL` at the top of `src/ui.js`. Export codes use the same format as the full game and import
+there directly.
 
 ## Pacing (bot simulation: perfect play, 24/7)
 
