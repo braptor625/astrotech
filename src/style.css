@@ -301,6 +301,17 @@ img.face.lg { width: 48px; height: 48px; }
 #ending .lines { max-width: 640px; font-size: 26px; line-height: 1.3; }
 #ending p { margin: 0 0 14px; opacity: 0; animation: fadein 1.2s steps(6) forwards; }
 @keyframes fadein { to { opacity: 1; } }
+.demo-tag { font-family: var(--f-display); font-size: 10px; color: var(--void); background: var(--gold); padding: 4px 7px; letter-spacing: 1px; }
+#ending.demoend { overflow-y: auto; align-items: center; }
+.demo-card { width: min(560px, 100%); padding: 22px; display: grid; gap: 14px; margin: auto; opacity: 0; animation: fadein 1s steps(6) forwards; }
+.demo-card h2 { color: var(--gold); font-size: 22px; margin: 0; }
+.demo-kick { font-family: var(--f-display); font-size: 10px; color: var(--dim); letter-spacing: 1px; text-transform: uppercase; }
+.demo-msg { font-size: 26px; line-height: 1.25; margin: 0; }
+.demo-sub { font-size: 18px; color: var(--dim); margin: 0; }
+.demo-stats { padding: 10px 12px; display: grid; gap: 4px; font-size: 20px; }
+.demo-stats b { font-weight: 400; color: var(--gold); }
+.demo-btns { display: grid; gap: 10px; }
+.demo-btns .btn { width: 100%; }
 
 /* ---------- narrow screens ---------- */
 @media (max-width: 980px) {

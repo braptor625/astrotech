@@ -3,8 +3,11 @@
   'use strict';
   const E = AT.E, SPR = AT.SPR, fmt = AT.fmt;
   const UI = AT.ui = {};
-  const SAVE_KEY = 'astrotech.save.v2';
-  const native = window.astrotechNative || null;
+  const STEAM_URL = 'https://store.steampowered.com/app/480/'; // TODO: replace with the real store page
+  const DEMO = !!AT.DEMO;
+  // Demo saves use their own key so they never overwrite a full-game save. The export format is identical.
+  const SAVE_KEY = DEMO ? 'astrotech.demo.save.v2' : 'astrotech.save.v2';
+  const native = DEMO ? null : (window.astrotechNative || null);
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const money = (x) => '$' + fmt(x);
@@ -970,6 +973,7 @@
       case 'prestige': {
         const i = +arg, now = performance.now();
         if (E.pendingGain(i) < 1) { AT.audio.play('deny'); break; }
+        if (DEMO) { showDemoEnd(); break; }
         if (!S.settings.noConfirm && !(confirmUntil[i] > now)) { confirmUntil[i] = now + 4000; AT.audio.play('alarm'); break; }
         confirmUntil[i] = 0; E.prestige(i); saveGame(); break;
       }
@@ -1001,6 +1005,8 @@
       case 'copy': copyExport(el); break;
       case 'ng': E.newGamePlus(); $('#ending') && $('#ending').remove(); sig = null; saveGame(); break;
       case 'keep': $('#ending') && $('#ending').remove(); break;
+      case 'demo-keep': $('#ending') && $('#ending').remove(); break;
+      case 'wishlist': openSteam(); break;
       case 'sound-top': S.settings.sound = !S.settings.sound; break;
     }
     render(); updateTop();
@@ -1065,6 +1071,33 @@
     document.body.appendChild(d);
     AT.audio.play('prestige');
   }
+  function openSteam() {
+    if (window.astrotechNative && window.astrotechNative.openExternal) { try { window.astrotechNative.openExternal(STEAM_URL); return; } catch (e) { /* fall through */ } }
+    try { window.open(STEAM_URL, '_blank', 'noopener'); } catch (e) { /* blocked */ }
+  }
+  // End-of-demo screen: shown when the first Kuiper Jump is attempted or already done (e.g. an imported save).
+  function showDemoEnd() {
+    if ($('#ending')) return;
+    const S = E.S;
+    const d = document.createElement('div');
+    d.id = 'ending';
+    d.className = 'demoend';
+    d.innerHTML = `<div class="panel demo-card">
+      <div class="demo-kick">AstroTech Mining Co. · Board Memorandum</div>
+      <h2>END OF DEMO</h2>
+      <p class="demo-msg">The Board has seen enough. Full operations resume on launch.</p>
+      <div class="slot demo-stats">
+        <div class="spread"><span>Time played</span><b>${AT.fmtTime(S.stats.totalTime)}</b></div>
+        <div class="spread"><span>Missions flown</span><b>${fmt(S.stats.missions)}</b></div>
+        <div class="spread"><span>Money earned</span><b>${money(S.earnedTotal)}</b></div>
+        <div class="spread"><span>Pilots lost</span><b>${S.memorial.length}</b></div>
+      </div>
+      <p class="demo-sub">The Kuiper Belt, the Oort Cloud and everything beyond are in the full game. Your save code carries over.</p>
+      <div class="demo-btns"><button class="btn gold big" data-act="wishlist">WISHLIST ON STEAM</button><button class="btn big" data-act="demo-keep">KEEP PLAYING THIS RUN<small>the Kuiper Jump stays locked</small></button></div>
+    </div>`;
+    document.body.appendChild(d);
+    AT.audio.play('prestige');
+  }
   function applySettings() { $('.scene-wrap').classList.toggle('scan', !!E.S.settings.scanlines); }
   function toggleFullscreen() {
     if (native && native.toggleFullscreen) { native.toggleFullscreen(); return; }
@@ -1107,6 +1140,7 @@
     AT.hooks.card = () => {};
     AT.hooks.event = (kind, arg) => {
       if (kind === 'region') toast('expansion', 'NEW SECTOR', AT.REGIONS[arg].name);
+      if (kind === 'demoend') showDemoEnd();
       if (kind === 'prestige') { AT.scene.burst(); AT.audio.play('prestige'); sig = null; lowSig = null; }
       if (kind === 'artifact') toast('gem', 'ARTIFACT', AT.ARTIFACTS[arg].name);
       if (kind === 'expedition') toast('star', 'EXPEDITION', E.EXP[arg].name);
@@ -1121,6 +1155,7 @@
     AT.hooks.log = addLog;
     if (native && native.achievement) for (const id in E.S.ach) native.achievement(id);
 
+    if (DEMO) $('#demo-tag').hidden = false;
     AT.scene.init($('#scene'));
     AT.scene.cb.select = (id) => selectTarget(id, 'map');
     AT.scene.cb.closeupClick = () => {};
@@ -1132,6 +1167,7 @@
       modal(`<h2>Welcome Back</h2><p class="note">You were away for ${AT.fmtTime(away)}${away > secs ? ` (offline progress caps at ${AT.fmtTime(cap)})` : ''}. Operations continued without you.</p><div class="slot"><div class="spread"><span>Revenue earned</span><b style="color:var(--gold);font-weight:400">${money(res.earned)}</b></div><div class="spread"><span>Missions completed</span><b style="font-weight:400">${fmt(res.missions)}</b></div></div><button class="btn gold" data-act="modal-close">BACK TO WORK</button>`);
     }
     bindEvents();
+    if (DEMO && E.S.layers[0].runs > 0) showDemoEnd(); // e.g. a full-game save imported into the demo
     updateReveal(); renderTabs(); render(); updateTop(); renderLower(); renderDirective(); renderViewBar();
     const hot = window.claude && window.claude.hot;
     if (hot && hot.snapshot) hot.snapshot(() => ({ save: E.save() }));

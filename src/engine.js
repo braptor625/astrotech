@@ -1224,6 +1224,7 @@
     const S = E.S, M = E.mults();
     const g = E.pendingGain(i, M);
     if (g < 1) return false;
+    if (AT.DEMO) { AT.hooks.event('demoend', i); return false; } // demo build: the first Kuiper Jump is the end of the demo
     const L = S.layers[i];
     const first = L.runs === 0;
     L.cur += g; L.total += g; L.runs++; L.lastGain = g;
