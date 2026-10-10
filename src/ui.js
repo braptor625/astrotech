@@ -499,6 +499,20 @@
   };
 
   // ----------------------------- RESEARCH -----------------------------
+  // Soft-hyphen split points for long node titles (display only; data.js names are unchanged).
+  const RES_SHY = {
+    'analytics': 'Ana|lytics', 'automated': 'Auto|mated', 'automation': 'Auto|mation', 'autopilot': 'Auto|pilot',
+    'coordination': 'Coor|di|nation', 'director': 'Direc|tor', 'distributed': 'Dis|trib|uted', 'dreadnought': 'Dread|nought',
+    'drilling': 'Dril|ling', 'drivers': 'Dri|vers', 'exchange': 'Ex|change', 'futures': 'Fu|tures', 'galactic': 'Gal|actic',
+    'geometry': 'Geo|metry', 'guidance': 'Guid|ance', 'habitats': 'Habi|tats', 'harvester': 'Har|vester', 'incorporation': 'Incor|po|ration',
+    'leviathan': 'Levia|than', 'lifting': 'Lift|ing', 'linguistics': 'Lin|guis|tics', 'management': 'Man|age|ment', 'markets': 'Mar|kets',
+    'matching': 'Match|ing', 'mechanics': 'Mech|anics', 'navigation': 'Navi|gation', 'notebooks': 'Note|books', 'orbital': 'Or|bital',
+    'positions': 'Po|sitions', 'program': 'Pro|gram', 'quantum': 'Quan|tum', 'recursive': 'Recur|sive', 'refining': 'Re|fining',
+    'relations': 'Rela|tions', 'shielding': 'Shield|ing', 'siphons': 'Si|phons', 'smelting': 'Smelt|ing', 'spectrometry': 'Spec|trom|etry',
+    'staging': 'Stag|ing', 'stations': 'Sta|tions', 'stellar': 'Stel|lar', 'telescope': 'Tele|scope', 'tungsten': 'Tung|sten',
+    'whipple': 'Whip|ple',
+  };
+  const resLabel = (name) => name.replace(/[A-Za-z]+/g, (w) => (RES_SHY[w.toLowerCase()] || w).replace(/\|/g, '­'));
   PANELS.research = {
     sig(S) { return resPage + '|' + S.region + '|' + AT.RESEARCH.filter((r) => r.region === resPage).map((r) => (S.research[r.id] ? 1 : 0)).join(''); },
     build(S, M) {
@@ -543,7 +557,7 @@
       v.rpnote = M.rules.noResearch ? 'Research is disabled in this challenge.' : M.scientists > 0 ? 'Scientists produce research. Output grows with revenue. Click a node to research it.' : 'Hire Scientists in the Crew console to start producing research.';
       for (const r of AT.RESEARCH.filter((x) => x.region === resPage)) {
         const done = !!S.research[r.id], avail = E.researchAvailable(r);
-        v['n_' + r.id] = { h: `${r.name}<small>${done ? 'DONE' : avail ? fmt(r.cost) + ' RP' : 'LOCKED'}</small>`, dis: !done && !(avail && S.rp >= r.cost), cls: { done, lockd: !done && !avail } };
+        v['n_' + r.id] = { h: `${resLabel(r.name)}<small>${done ? 'DONE' : avail ? fmt(r.cost) + ' RP' : 'LOCKED'}</small>`, dis: !done && !(avail && S.rp >= r.cost), cls: { done, lockd: !done && !avail } };
       }
       return v;
     },

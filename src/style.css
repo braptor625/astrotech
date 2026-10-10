@@ -239,9 +239,9 @@ img.face.lg { width: 48px; height: 48px; }
 
 /* research */
 .tree-wrap { container-type: inline-size; overflow-x: hidden; overflow-y: hidden; padding-bottom: 6px; }
-.tree { position: relative; display: grid; width: 100%; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(4, 68px); gap: 10px clamp(4px, 3cqi, 16px); padding: 6px; }
+.tree { position: relative; display: grid; width: 100%; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(68px, auto)); gap: 10px clamp(4px, 3cqi, 16px); padding: 6px; }
 .tree svg { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-.node { min-width: 0; overflow-wrap: anywhere; hyphens: auto;font-family: var(--f-display); font-size: 9px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; text-align: left; white-space: normal; padding: 7px clamp(3px, 1.2cqi, 8px) 6px; z-index: 1; }
+.node { min-width: 0; hyphens: manual; letter-spacing: 0; font-family: var(--f-display); font-size: 9px;display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; text-align: left; white-space: normal; padding: 7px clamp(3px, 1.2cqi, 8px) 6px; z-index: 1; }
 .node small { font-family: var(--f-body); font-size: 16px; }
 .node.done { background: var(--gold); color: #2a1a00; }
 .node.lockd { background: var(--slot-lo); color: var(--faint); }
