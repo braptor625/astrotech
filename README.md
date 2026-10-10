@@ -32,7 +32,7 @@ node tools/sim.js 16        # check pacing after changing numbers in data.js
 
 ## Pacing (bot simulation: perfect play, 24/7)
 
-First Kuiper Jump ~1h · Oort Exodus ~8-10h · Stellar Ignition ~18-24h · Galactic Ascent ~24-29h · ending ~32-39h.
+First Kuiper Jump ~1h · Oort Exodus ~8-10h · Stellar Ignition ~17-20h · Galactic Ascent ~23-26h · ending ~28-33h (mean ~31h). See docs/pacing.md.
 The bot plays optimally every second with no breaks; real players should expect roughly 2-3x that,
 plus 13 challenges, 32 artifacts (collecting all needs a second universe), and NG+.
 

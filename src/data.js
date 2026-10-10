@@ -511,6 +511,7 @@
         { n: 8,  text: 'Start every run with Fleet Coordination AI.', fx: { startFleetAI: 1 } },
         { n: 12, text: 'Procurement AI: pads, ships and fleet upgrades can be bought automatically.', fx: { autobuy: 1 } },
         { n: 15, text: 'Keep Board Automation and Guidance research.', fx: { keepBiz: 1 } },
+        { n: 12, text: 'Cold Chain: everything sells for 1.3x.', fx: { all: 1.3 } },
         { n: 30, text: 'Projects stay completed through Kuiper Jumps.', fx: { keepProjects0: 1 } },
         { n: 60, text: 'Cryo Core gains x2.', fx: { gain0: 2 } },
       ],
@@ -542,6 +543,7 @@
         { n: 3,  text: 'Oort challenges unlocked.', fx: { challenges1: 1 } },
         { n: 5,  text: 'Start every run with an Icebreaker.', fx: { startIce: 1 } },
         { n: 10, text: 'Kuiper Jump milestones count as completed.', fx: { allMilestones0: 1 } },
+        { n: 9, text: 'Shard Exchange: gains x1.6.', fx: { gain1: 1.6 } },
         { n: 25, text: 'Comet Shard gains x2.', fx: { gain1: 2 } },
       ],
       challenges: [
@@ -554,7 +556,7 @@
     { id: 'stars', region: 3, name: 'Stellar Ignition', verb: 'IGNITE A PATH TO THE STARS', cur: 'Star Seeds', sym: 'SS', req: 1e37, exp: 0.16, color: '#ff8f3d',
       flavor: 'Burn the solar system for one push. The stars are next.',
       upgrades: [
-        { id: 's_furnace',  name: 'Stellar Furnace',  base: 1,  growth: 4,   max: 25, fx: { all: 8 },         desc: 'Everything x8 per level.' },
+        { id: 's_furnace',  name: 'Stellar Furnace',  base: 1,  growth: 4,   max: 25, fx: { all: 5 },         desc: 'Everything x5 per level.' },
         { id: 's_cascade',  name: 'Shard Cascade',    base: 1,  growth: 4,   max: 10, fx: { gain1: 3 },       desc: 'Comet Shard gains x3 per level.' },
         { id: 's_eternal',  name: 'Eternal Archives', base: 3,  growth: 1,   max: 1,  fx: { keepLayer1: 1, keepResearchAll: 1 }, desc: 'Keep Comet Shard upgrades and all research on Ignition.' },
         { id: 's_daemon',   name: 'Exodus Daemon',    base: 4,  growth: 1,   max: 1,  fx: { autoLayer1: 1 },  desc: 'Automatically perform Oort Exoduses.' },
@@ -589,6 +591,7 @@
         { n: 1, text: 'Galaxies appear as targets in every run.', fx: {} },
         { n: 2, text: 'Void challenges unlocked.', fx: { challenges3: 1 } },
         { n: 3, text: 'Stellar Ignition milestones count as completed.', fx: { allMilestones2: 1 } },
+        { n: 1, text: 'Dark Ledger: gains x3.', fx: { gain3: 3 } },
         { n: 10, text: 'Dark Matter gains x2.', fx: { gain3: 2 } },
       ],
       challenges: [
