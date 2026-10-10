@@ -324,6 +324,15 @@
       let lx = Math.round(p.x + 7), ly = Math.round(p.y - 10);
       if (lx + w > W - 2) lx = Math.round(p.x - 7 - w);
       if (ly < 2) ly = Math.round(p.y + 6);
+      // keep clear of the EARTH label box (drawn above); try the other sides of the target
+      const ep = r === 0 ? earthPos() : null;
+      const ex = ep ? Math.round(ep.x) - 9 : 0, ey = ep ? Math.round(ep.y) + 6 : 0;
+      const hits = (x, y) => ep && x - 1 < ex + 21 && ex - 1 < x + w && y - 1 < ey + 7 && ey - 1 < y + 7;
+      if (hits(lx, ly)) {
+        const alt = [[p.x + 7, p.y + 6], [p.x - 7 - w, p.y - 10], [p.x - 7 - w, p.y + 6]];
+        const free = alt.map(([x, y]) => [Math.round(Math.min(Math.max(x, 2), W - 2 - w)), Math.round(Math.min(Math.max(y, 2), H - 9))]).find(([x, y]) => !hits(x, y));
+        if (free) [lx, ly] = free;
+      }
       g.fillStyle = '#05070fcc'; g.fillRect(lx - 1, ly - 1, w, 8);
       R.text(g, label, lx + 1, ly + 1, hl.story ? '#ffd866' : '#e8ecff');
     }
