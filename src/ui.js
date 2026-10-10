@@ -11,7 +11,7 @@
   const pct = (x) => AT.fmtPct(x);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let tab = 'missions', sig = null, refs = [], tipEl, tipKey = null, tipX = 0, tipY = 0;
-  let lowTab = 'flights', lowSig = null, cardSig = null, resPage = 0;
+  let lowTab = 'flights', lowSig = null, cardSig = null, resPage = 0, treeRO = null;
   const confirmUntil = {};
   const cache = new WeakMap();
 
@@ -510,7 +510,8 @@
       return h + '</div></div>';
     },
     after(body, S) {
-      requestAnimationFrame(() => {
+      // Nodes are fluid-width, so connectors are re-measured whenever the tree is resized.
+      const draw = () => {
         const svg = $('#tree-svg', body), tree = $('#tree', body);
         if (!svg || !tree) return;
         let lines = '';
@@ -525,8 +526,16 @@
             lines += `<path d="M${x1} ${y1}H${mx}V${y2}H${x2}" fill="none" stroke="${col}" stroke-width="3" shape-rendering="crispEdges"/>`;
           }
         }
-        svg.setAttribute('width', tree.scrollWidth); svg.setAttribute('height', tree.scrollHeight);
+        svg.setAttribute('width', tree.clientWidth); svg.setAttribute('height', tree.scrollHeight);
         svg.innerHTML = lines;
+      };
+      requestAnimationFrame(() => {
+        const tree = $('#tree', body);
+        if (!tree) return;
+        draw();
+        if (treeRO) treeRO.disconnect();
+        treeRO = typeof ResizeObserver === 'function' ? new ResizeObserver(draw) : null;
+        if (treeRO) treeRO.observe(tree);
       });
     },
     update(S, M) {
