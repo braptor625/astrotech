@@ -404,8 +404,8 @@
       let list = '';
       for (const p of S.pilots) {
         const tr = AT.TRAITS.find((x) => x.id === p.trait);
-        list += `<div class="row cx-pilot ${p.id === sel ? 'sel' : ''}" style="--cols:32px minmax(0,1fr) 34px minmax(70px,0.9fr)" role="button" tabindex="0" data-act="selpilot" data-arg="${p.id}" data-tip="pilot:${p.id}"><img class="face" src="${SPR.portrait(p)}" alt="">
-          <div class="cx-nm"><b>${esc(p.name)}</b>${p.founder ? ' <span class="hull">FOUNDER</span>' : ''}<div class="dim trait">${tr.name}</div></div>
+        list += `<div class="row cx-pilot ${p.id === sel ? 'sel' : ''}" style="--cols:32px minmax(0,1.2fr) 34px minmax(70px,0.8fr)" role="button" tabindex="0" data-act="selpilot" data-arg="${p.id}" data-tip="pilot:${p.id}"><img class="face" src="${SPR.portrait(p)}" alt="">
+          <div class="cx-nm"><b>${esc(p.name)}${p.founder ? ' <span class="gold" data-tip="txt:Founder">★</span>' : ''}</b><div class="dim trait">${tr.name}</div></div>
           <span class="num lvl" data-k="pl_${p.id}"></span><span class="dim cx-st" data-k="ps_${p.id}"></span></div>`;
       }
       let det = '';
@@ -428,7 +428,7 @@
       if (!S.candidates.length) cl = '<p class="empty">No candidates right now. A new batch arrives soon.</p>';
       h += sect('crew:cands', 'Candidates', { count: S.candidates.length, ctl: `<span class="dim" data-k="candt"></span>${btn('refreshcand', 0, 'tiny', 'refreshcand')}` }, cl);
       // ---- staff
-      let sl = '<div class="row hdr" style="--cols:28px minmax(0,1fr) 34px 64px auto auto"><span></span><span>Role</span><span class="num">Own</span><span class="num" data-tip="txt:Salary per second for this role.">Pay/s</span><span></span><span></span></div>';
+      let sl = '<div class="row hdr" style="--cols:28px minmax(0,1fr) 34px 64px auto auto"><span></span><span>Role</span><span class="num">Own</span><span class="num" data-tip="txt:Salary per second for this role.">Pay</span><span></span><span></span></div>';
       for (const c of AT.STAFF) {
         sl += `<div class="row cx-staff" style="--cols:28px minmax(0,1fr) 34px 64px auto auto" data-tip="staff:${c.id}"><img class="ico pixel" src="${SPR.icon(STAFF_ICON[c.id] || 'crew')}" alt="">
           <div class="cx-nm"><b>${c.name}s</b><div class="dim" data-k="c_${c.id}_fx"></div></div><span class="num lvl" data-k="c_${c.id}_n"></span><span class="num dim" data-k="c_${c.id}_sal"></span>
@@ -490,7 +490,7 @@
     build(S, M) {
       sectDefault('market:auto', true);
       let h = conHead('Market', 'Sell ore and deliver client contracts.', btn('sellall', 0, 'gold big', 'sellall'));
-      const cols = '28px minmax(56px,1fr) 2.8em 3.6em 3em 50px 2.1em 5.2em';
+      const cols = '28px minmax(56px,1fr) calc(var(--fb-m) * 2.8) calc(var(--fb-m) * 3.6) calc(var(--fb-m) * 3) 50px calc(var(--fb-m) * 2.1) calc(var(--fb-m) * 5.2)';
       let ores = `<div class="row hdr" style="--cols:${cols}"><span></span><span>Ore</span><span class="num">Hold</span><span class="num">Price</span><span class="num" data-tip="txt:Demand. Big sales flood the market and push that ore's price down. Prices recover over time. Selling into strong demand pays best.">Dem.</span><span></span><span></span><span></span></div>`;
       for (const id of this.ores(S)) {
         ores += `<div class="row mk-ore" style="--cols:${cols}" data-tip="ore:${id}"><img class="ico pixel" src="${SPR.oreIcon(id)}" alt="">

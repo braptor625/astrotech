@@ -586,7 +586,7 @@ dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 .mk-ore .num { font-size: var(--fb-s); }
 .mk-ore .btn small { display: none; }
 .mk-con .cx-nm .ice { color: var(--ice); font-family: var(--f-display); font-size: var(--fs-xs); }
-.mk-con .gold { color: var(--gold); font-size: var(--fb-s); }
+.mk-con .num .gold { color: var(--gold); font-size: var(--fb-s); }
 .mk-acts { display: flex; gap: 4px; align-items: center; }
 .mk-rep { margin: 0 0 6px; font-size: var(--fb-xs); }
 .mk-rep .bar { margin-top: 3px; height: 5px; }
@@ -598,7 +598,7 @@ dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 .op-cap.full b { color: var(--warn); }
 .op-cap .dim { font-size: inherit; }
 .op-build .bar { margin-top: 0; }
-@container con (max-width: 640px) { .mk-ore canvas, .mk-ore .btn:not(.gold), .row.hdr > :nth-child(6), .row.hdr > :nth-child(7) { display: none; } .mk-ore, .row.hdr { --cols: 28px minmax(52px, 1fr) 2.8em 3.6em 3em 5.2em !important; } }
+@container con (max-width: 640px) { .mk-ore canvas, .mk-ore .btn:not(.gold), .row.hdr > :nth-child(6), .row.hdr > :nth-child(7) { display: none; } .mk-ore, .row.hdr { --cols: 28px minmax(52px, 1fr) calc(var(--fb-m) * 2.8) calc(var(--fb-m) * 3.6) calc(var(--fb-m) * 3) calc(var(--fb-m) * 5.2) !important; } }
 .mk-ore, .row.hdr { column-gap: 8px; }
 
 /* === console: projects/company/archive === */
@@ -627,3 +627,5 @@ dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 .sect .dir.cur { background: color-mix(in srgb, var(--slot-lo) 70%, transparent); box-shadow: inset 4px 0 0 var(--gold); }
 .sect .arts, .sect .achs { margin-top: 2px; }
 .sect .memorial { padding: 4px 0 0; }
+.cx-nm { overflow: hidden; } .cx-nm > * { overflow: hidden; text-overflow: ellipsis; }
+.cx-pilot .cx-nm > b, .op-row .cx-nm > b { display: block; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
