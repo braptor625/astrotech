@@ -200,41 +200,43 @@
     const k = new Map(list.map((t) => [t, key(t)]));
     return list.sort((a, b) => (a.region - b.region) * 0 + k.get(a) - k.get(b));
   }
+  const TCOLS = '26px minmax(0,1fr) 76px 52px 40px';
   PANELS.missions = {
     sig(S, M) {
       const ids = S.targets.map((t) => t.id + (t.surveyed ? 's' : '') + (t.outpost ? 'o' : '')).join(',');
-      return ids + '|' + S.selTarget + '|' + S.ships.map((s) => s.id).join(',') + '|' + (S.settings.sort || 'value') + '|' + S.focus + '|' + S.region + (M.flags.outposts ? 'O' : '') + (M.flags.flight ? 'F' : '') + (M.flags.fleetai ? 'A' : '') + (S._sortTick || 0);
+      // ships are listed by id + whether they are idle (rows for ships that are away collapse into one line)
+      const ships = S.ships.map((s) => s.id + (s.state === 'idle' ? 'i' : 'b')).join(',');
+      return ids + '|' + S.selTarget + '|' + ships + '|' + (S.settings.sort || 'value') + '|' + S.focus + '|' + S.region + (M.flags.outposts ? 'O' : '') + (M.flags.flight ? 'F' : '') + (M.flags.fleetai ? 'A' : '') + (S._sortTick || 0) + isCollapsed('missions:targets');
     },
     build(S, M) {
-      let h = `${conHead('Mission Control', 'Pick a target, assign a ship, launch.', `<div class="seg">
-        <span class="tog">SORT</span>${['value', 'risk', 'dist'].map((m) => `<button class="btn" data-act="sort" data-arg="${m}" data-k="sort_${m}">${m === 'value' ? '$/MIN' : m === 'risk' ? 'RISK' : 'DIST'}</button>`).join('')}</div>`)}
-        <div class="mc-status slot"><span data-k="padsfree"></span><span data-k="tracking"></span><span data-k="nextfind"></span>
-        ${M.flags.flight ? btn('dispatch', 0, 'gold', 'dispatch', 'data-tip="txt:Send every idle ship to its best target under your risk limit."') : ''}</div>`;
-      if (S.region > 0) h += `<div class="seg focus"><span class="tog">TELESCOPE FOCUS</span>${['auto', ...Array.from({ length: S.region + 1 }, (_, i) => String(i))].map((f) => `<button class="btn" data-act="focus" data-arg="${f}" data-k="focus_${f}">${f === 'auto' ? 'AUTO' : AT.REGIONS[+f].short}</button>`).join('')}</div>`;
-      const sel = S.selTarget && E.targetById(S.selTarget);
-      if (sel) h += targetCard(sel, S, M);
-      else h += `<div class="slot teaser">CLICK A TARGET BELOW OR ON THE SYSTEM MAP TO PLAN A MISSION.</div>`;
-      h += `<h3 class="section-h">TRACKED TARGETS</h3><div class="tlist">`;
+      const chips = `<span class="stat-chip" data-k="padsfree" data-tip="txt:Launch pads free right now. Each mission in flight holds one pad."></span><span class="stat-chip" data-k="tracking" data-tip="txt:Targets the telescope tracks, and the time until it finds the next one."></span>`;
+      const dispatch = M.flags.flight ? btn('dispatch', 0, 'gold', 'dispatch', 'data-tip="txt:Send every idle ship to its best target under your risk limit."') : '';
+      const h = conHead('Mission Control', 'Pick a target, assign a ship, launch.', chips + dispatch);
+      const sortBtn = (m, l) => `<button class="btn tiny" data-act="sort" data-arg="${m}" data-k="sort_${m}">${l}</button>`;
+      const sortCtl = `<span class="segctl" role="group" aria-label="Sort targets">${sortBtn('value', '$/MIN')}${sortBtn('risk', 'RISK')}${sortBtn('dist', 'DIST')}</span>`;
+      let list = '';
+      if (S.region > 0) list += `<div class="mc-focus"><span class="tog">TELESCOPE</span><span class="segctl">${['auto', ...Array.from({ length: S.region + 1 }, (_, i) => String(i))].map((f) => `<button class="btn tiny" data-act="focus" data-arg="${f}" data-k="focus_${f}">${f === 'auto' ? 'AUTO' : AT.REGIONS[+f].short}</button>`).join('')}</span></div>`;
+      list += `<div class="row rh" style="--cols:${TCOLS}"><span></span><span>TARGET</span><span class="num">$/MIN</span><span class="num">TRIP</span><span class="num">RISK</span></div>`;
       for (const t of sortedTargets(S, M)) {
         const cls = AT.CLASSES[t.cls];
-        h += `<div class="trow slot ${t.id === S.selTarget ? 'sel' : ''} ${t.story ? 'story' : ''}" data-act="seltarget" data-arg="${t.id}" data-tip="tgt:${t.id}">
+        list += `<div class="row trow ${t.id === S.selTarget ? 'sel' : ''} ${t.story ? 'story' : ''}" style="--cols:${TCOLS}" data-act="seltarget" data-arg="${t.id}" data-tip="tgt:${t.id}">
           <img class="tico" src="${SPR.bodyIcon(t)}" alt="">
-          <div class="tmain"><div class="tname">${t.story ? '<span class="star">★</span> ' : ''}${esc(t.name)}</div>
-            <div class="tsub"><span class="chip-c" style="--c:${cls.tint}">${cls.name}</span> ${AT.REGIONS[t.region].short} ${t.surveyed ? '' : '<span class="unk">UNSURVEYED</span>'}${t.rich && t.surveyed ? ' <span class="rich">RICH</span>' : ''}${t.outpost ? ' <span class="opst">OUTPOST</span>' : ''}</div>
+          <div class="tmain"><div class="tname">${esc(t.name)}</div>
+            <div class="tsub">${t.story ? '<span class="xtag">EXPEDITION</span> ' : `<span class="chip-c" style="--c:${cls.tint}">${cls.name}</span> `}${AT.REGIONS[t.region].short}${t.surveyed ? '' : ' <span class="unk">UNSURVEYED</span>'}${t.rich && t.surveyed ? ' <span class="rich">RICH</span>' : ''}${t.outpost ? ' <span class="opst">OUTPOST</span>' : ''}</div>
             ${t.story ? '' : `<div class="bar thin"><i data-k="tres_${t.id}"></i></div>`}</div>
-          <div class="tnum"><b data-k="tval_${t.id}"></b><span data-k="ttime_${t.id}"></span></div>
-          <div class="trisk" data-k="trisk_${t.id}"></div></div>`;
+          <span class="num t-val" data-k="tval_${t.id}"></span><span class="num t-time" data-k="ttime_${t.id}"></span><span class="num t-risk" data-k="trisk_${t.id}"></span></div>`;
       }
-      h += '</div>';
-      return h;
+      const master = sect('missions:targets', 'Targets', { count: S.targets.length, ctl: sortCtl }, list);
+      const sel = S.selTarget && E.targetById(S.selTarget);
+      const detail = sel ? targetCard(sel, S, M) : `<section class="sect"><p class="empty">Select a target from the list or the system map to plan a mission.</p></section>`;
+      return h + `<div class="md mc"><div class="md-list">${master}</div><div class="md-detail">${detail}</div></div>`;
     },
     update(S, M) {
       const v = {};
       for (const m of ['value', 'risk', 'dist']) v['sort_' + m] = { cls: { on: (S.settings.sort || 'value') === m } };
       v.padsfree = `PADS ${E.padsFree()}/${S.pads} FREE`;
-      const tracked = S.targets.filter((t) => !t.story && !t.outpost).length;
-      v.tracking = `TRACKING ${tracked}/${E.targetCap(M)}`;
-      v.nextfind = tracked >= E.targetCap(M) ? 'TELESCOPE FULL' : `NEXT FIND ${Math.ceil(Math.max(0, E.discoveryInterval(M) - S.discT))}s`;
+      const tracked = S.targets.filter((t) => !t.story && !t.outpost).length, cap = E.targetCap(M);
+      v.tracking = tracked >= cap ? `TRACKING ${tracked}/${cap} · FULL` : `TRACKING ${tracked}/${cap} · NEXT ${Math.ceil(Math.max(0, E.discoveryInterval(M) - S.discT))}s`;
       if (M.flags.flight) v.dispatch = { t: 'DISPATCH IDLE', dis: !S.ships.some((s) => E.canFly(s, M)) || E.padsFree() <= 0 };
       v['focus_' + 'auto'] = { cls: { on: S.focus === 'auto' } };
       for (let i = 0; i <= S.region; i++) v['focus_' + i] = { cls: { on: S.focus === String(i) } };
@@ -245,10 +247,10 @@
         }
         const b = bestFor(t, M);
         if (b) {
-          v['tval_' + t.id] = t.story ? 'EXPEDITION' : money(b.p.value * b.p.valMult) + '/trip';
-          v['ttime_' + t.id] = AT.fmtTime(b.p.T) + ' · ' + money(b.p.ev * 60) + '/min';
+          v['tval_' + t.id] = t.story ? money(b.p.value * b.p.valMult) : money(b.p.ev * 60);
+          v['ttime_' + t.id] = AT.fmtTime(b.p.T);
           v['trisk_' + t.id] = { t: pct(b.p.shownRisk), cls: { 'd-up': b.p.shownRisk < 0.15, 'd-mid': b.p.shownRisk >= 0.15 && b.p.shownRisk < 0.35, 'd-down': b.p.shownRisk >= 0.35 } };
-        } else { v['tval_' + t.id] = '—'; v['ttime_' + t.id] = 'no ships'; v['trisk_' + t.id] = { t: '', cls: {} }; }
+        } else { v['tval_' + t.id] = '—'; v['ttime_' + t.id] = '—'; v['trisk_' + t.id] = { t: '', cls: {} }; }
       }
       const sel = S.selTarget && E.targetById(S.selTarget);
       if (sel) Object.assign(v, targetCardUpdate(sel, S, M));
@@ -265,30 +267,33 @@
   function targetCard(t, S, M) {
     const cls = AT.CLASSES[t.cls];
     const x = t.story ? E.EXP[t.story] : null;
-    let h = `<div class="tcard slot ${t.story ? 'story' : ''}">
-      <div class="spread"><div class="flex"><img class="tico lg" src="${SPR.bodyIcon(t)}" alt=""><div><h3>${esc(t.name)}</h3><div class="tsub"><span class="chip-c" style="--c:${cls.tint}">${cls.long}</span> · ${AT.REGIONS[t.region].name}</div></div></div>
-      <div class="flex"><button class="btn ghost" data-act="closeup" data-arg="${t.id}" data-tip="txt:Show this target in the viewport close-up.">CLOSE-UP</button>${t.story || t.outpost ? '' : btn('drop', t.id, 'ghost', 'drop')}</div></div>`;
+    let h = `<section class="sect tcard ${t.story ? 'story' : ''}">
+      <div class="tc-head"><img class="tico lg" src="${SPR.bodyIcon(t)}" alt=""><div class="tc-title"><h3>${esc(t.name)}</h3><div class="tsub">${t.story ? '<span class="xtag">EXPEDITION</span> · ' : ''}<span class="chip-c" style="--c:${cls.tint}">${cls.long}</span> · ${AT.REGIONS[t.region].name}</div></div>
+      <div class="tc-tools"><button class="btn ghost tiny" data-act="closeup" data-arg="${t.id}" data-tip="txt:Show this target in the viewport close-up.">CLOSE-UP</button>${t.story || t.outpost ? '' : btn('drop', t.id, 'ghost tiny', 'drop')}</div></div>`;
     if (x) h += `<p class="note story-text">${esc(x.intro)}</p>`;
     else h += compBar(t);
-    h += `<div class="facts"><span data-k="tc_dist"></span><span data-k="tc_haz"></span><span data-k="tc_res"></span><span data-k="tc_out"></span></div>`;
-    if (!t.story) h += `<div class="flex acts">${btn('survey', t.id, '', 'tc_survey')}${M.flags.outposts ? btn('outpost', t.id, '', 'tc_outpost') : ''}${t.outpost ? btn('upout', t.id, 'gold', 'tc_upout', 'data-rep="1"') : ''}</div>`;
-    h += `<h4 class="section-h">ASSIGN A SHIP</h4><div class="shiplist">`;
+    h += `<div class="kv"><div><span>DISTANCE</span><b data-k="tc_dist"></b></div><div><span>HAZARD</span><b data-k="tc_haz"></b></div><div><span>${t.story ? 'TYPE' : 'RESERVE'}</span><b data-k="tc_res"></b></div>${t.outpost ? '<div><span>OUTPOST</span><b data-k="tc_out"></b></div>' : ''}</div>`;
+    if (!t.story) h += `<div class="flex acts">${btn('survey', t.id, '', 'tc_survey')}${M.flags.outposts ? btn('outpost', t.id, '', 'tc_outpost') : ''}${t.outpost ? btn('upout', t.id, '', 'tc_upout', 'data-rep="1"') : ''}</div>`;
+    const ready = S.ships.filter((s) => s.state === 'idle');
+    const busy = S.ships.length - ready.length;
+    h += `<div class="sub-h"><h4>Assign a ship</h4>${S.ships.length ? `<span class="count">${ready.length} ready</span>` : ''}</div><div class="shiplist">`;
     if (!S.ships.length) h += `<div class="teaser">NO SHIPS YET. BUY ONE IN THE FLEET CONSOLE.</div>`;
-    for (const sh of S.ships) {
-      h += `<div class="srow" data-tip="ship:${sh.id}">${rk(sh.hull, 34)}
+    for (const sh of ready) {
+      h += `<div class="row srow" style="--cols:38px minmax(0,1fr) auto auto" data-tip="ship:${sh.id}">${rk(sh.hull, 34)}
         <div class="smain"><div class="sname">${esc(sh.name)} <span class="hull">${E.HULL[sh.hull].name}</span></div><div class="ssub" data-k="sp_${sh.id}"></div></div>
         <div class="snum" data-k="sn_${sh.id}"></div>
         ${btn('launch', sh.id + ':' + t.id, 'gold', 'sl_' + sh.id)}</div>`;
     }
-    return h + '</div></div>';
+    if (busy) h += `<div class="busy-line" data-k="busy"></div>`;
+    return h + '</div></section>';
   }
   function targetCardUpdate(t, S, M) {
     const v = {};
     const sz = t.size * (M.flags.deep ? 100 : 1);
-    v.tc_dist = `DIST ${fmt(t.dist * AT.DIST_SCALE[t.region])} ${AT.DIST_UNIT[t.region]}`;
-    v.tc_haz = `HAZARD ${Math.round((t.surveyed ? t.haz : t.hazEst) * 100)}%${t.surveyed ? '' : ' (EST)'}`;
-    v.tc_res = t.story ? 'ONE-TIME EXPEDITION' : `RESERVE ${fmt(E.targetLeft(t, M))}t (${Math.round(E.targetLeft(t, M) / sz * 100)}%)`;
-    v.tc_out = t.outpost ? `${AT.OUTPOST.names[t.region].toUpperCase()} LV ${t.outpost.lvl} · ${fmt(E.outpostRate(t, M))}t/s` : '';
+    v.tc_dist = `${fmt(t.dist * AT.DIST_SCALE[t.region])} ${AT.DIST_UNIT[t.region]}`;
+    v.tc_haz = `${Math.round((t.surveyed ? t.haz : t.hazEst) * 100)}%${t.surveyed ? '' : ' (est)'}`;
+    v.tc_res = t.story ? 'One-time reward' : `${fmt(E.targetLeft(t, M))}t (${Math.round(E.targetLeft(t, M) / sz * 100)}%)`;
+    v.tc_out = t.outpost ? `${AT.OUTPOST.names[t.region]} LV ${t.outpost.lvl} · ${fmt(E.outpostRate(t, M))}t/s` : '';
     if (!t.story) {
       const sb = E.surveyBlock(t, M);
       const sv = S.surveys.find((x) => x.target === t.id);
@@ -301,69 +306,87 @@
       if (t.outpost) { const c = E.outpostUpCost(t, M); v.tc_upout = { h: `UPGRADE<small>${money(c)}</small>`, dis: S.money < c || t.outpost.lvl >= AT.OUTPOST.maxLevel }; }
       v.drop = { t: 'DROP', tip: 'txt:Stop tracking this target. Frees a telescope slot.' };
     }
+    let nm = 0, nr = 0, next = Infinity;
     for (const sh of S.ships) {
+      if (sh.state === 'mission') { nm++; const m = S.missions.find((x) => x.ship === sh.id); if (m) next = Math.min(next, m.T - m.t); continue; }
+      if (sh.state === 'repair') { nr++; next = Math.min(next, sh.repairT); continue; }
       const p = E.plan(sh, t, M);
       const pilot = sh.pilot ? E.pilotById(sh.pilot) : null;
-      const st = sh.state === 'mission' ? 'ON MISSION' : sh.state === 'repair' ? `REPAIR ${Math.ceil(sh.repairT)}s` : 'READY';
-      v['sp_' + sh.id] = `${pilot ? pilot.name + ' L' + pilot.level : (M.flags.aipilots ? 'AI pilot' : M.flags.autopilot ? 'Autopilot' : 'NO PILOT')} · hull ${Math.round(sh.cond * 100)}% · ${st}`;
+      v['sp_' + sh.id] = `${pilot ? pilot.name + ' L' + pilot.level : (M.flags.aipilots ? 'AI pilot' : M.flags.autopilot ? 'Autopilot' : 'NO PILOT')} · hull ${Math.round(sh.cond * 100)}%`;
       v['sn_' + sh.id] = { h: `<b>${money(p.value * p.valMult)}</b><span>${AT.fmtTime(p.T)} · <em class="${RISKCOL(p.shownRisk)}">${pct(p.shownRisk)} risk</em></span>` };
       const block = E.launchBlock(sh, t, M);
       v['sl_' + sh.id] = { h: block ? 'LAUNCH<small>—</small>' : `LAUNCH<small>${money(p.launch)} fee</small>`, dis: !!block, tip: 'txt:' + (block || 'Launch fee ' + money(p.launch) + '. Outcome is rolled at launch: success, partial, failure, or lost.') };
     }
+    const n = nm + nr;
+    if (n) v.busy = `${n} ship${n > 1 ? 's' : ''} busy · ${[nm ? nm + ' flying' : '', nr ? nr + ' in repair' : ''].filter(Boolean).join(', ')} · next back ${AT.fmtTime(next)}`;
     return v;
   }
 
   // ----------------------------- FLEET -----------------------------
+  const wornShip = (s) => s.cond < 0.6;
   PANELS.fleet = {
     sig(S, M) {
-      return S.ships.map((s) => s.id + s.hull).join(',') + '|' + AT.HULLS.filter((h) => E.hullUnlocked(h, M)).length + '|' + [...new Set(S.ships.map((s) => s.hull))].join() + (M.flags.flight ? 'F' : '') + (M.flags.autobuy ? 'B' : '') + (M.flags.autorepair ? 'R' : '') + S.region;
+      // worn hulls are listed first, so the order (and the worn marker) is part of the layout
+      return S.ships.map((s) => s.id + s.hull + (wornShip(s) ? 'w' : '')).join(',') + '|' + AT.HULLS.filter((h) => E.hullUnlocked(h, M)).length + '|' + [...new Set(S.ships.map((s) => s.hull))].join() + (M.flags.flight ? 'F' : '') + (M.flags.autobuy ? 'B' : '') + (M.flags.autorepair ? 'R' : '') + S.region + JSON.stringify(S.settings.collapsed || {});
     },
     build(S, M) {
-      let h = `${conHead('Fleet & Infrastructure', 'Buy ships, pads and probes. Keep hulls in shape.', M.flags.autobuy ? `<div class="seg"><span class="tog">AUTO-BUY</span>${btn('autobuy', 'pads', '', 'ab_pads')}${btn('autobuy', 'ships', '', 'ab_ships')}${btn('autobuy', 'modules', '', 'ab_modules')}</div>` : '')}
-        <div class="cards three">
-          <div class="card slot"><h4>${SPR.img('pad')} Launch Pads</h4><p data-k="pad_txt"></p>${btn('pad', 0, 'gold', 'pad_btn')}</div>
-          <div class="card slot"><h4>${SPR.img('scope')} Observatory</h4><p data-k="obs_txt"></p>${btn('obs', 0, '', 'obs_btn')}</div>
-          <div class="card slot"><h4>${SPR.img('probe')} Survey Probes</h4><p data-k="probe_txt"></p>${btn('probe', 0, '', 'probe_btn')}</div>
-        </div>
-        <h3 class="section-h">SHIPYARD</h3><div class="cards">`;
-      let shownLocked = 0;
-      for (const hl of AT.HULLS) {
-        if (hl.region > S.region) continue;
-        const un = E.hullUnlocked(hl, M);
-        if (!un) { if (shownLocked++ >= 1) continue; }
-        h += `<div class="card slot hullcard ${un ? '' : 'locked'}" data-tip="hull:${hl.id}"><div class="flex">${rk(hl.id, 52, 'lg')}<div><h4>${hl.name}</h4><p>${hl.desc}</p></div></div>
-          <div class="hstats"><span>CARGO <b>${fmt(hl.cargo)}t</b></span><span>SPEED <b>${hl.speed}</b></span><span>RELIAB. <b>${Math.round(hl.rel * 100)}%</b></span><span>DRILL <b>${fmt(hl.drill)}t/s</b></span></div>
-          ${un ? btn('buyship', hl.id, 'gold', 'bs_' + hl.id) : `<div class="teaser">RESEARCH ${E.RES[hl.unlock] ? E.RES[hl.unlock].name.toUpperCase() : ''}</div>`}</div>`;
-      }
-      h += '</div>';
-      const owned = [...new Set(S.ships.map((s) => s.hull))];
-      if (owned.length) {
-        h += `<h3 class="section-h">FLEET UPGRADES <span class="sub">apply to every ship of that hull</span></h3><div class="list">`;
-        for (const hid of owned) {
-          h += `<div class="slot modrow"><div class="flex">${rk(hid, 28)}<b>${E.HULL[hid].name}</b></div><div class="seg">`;
-          for (const mod of AT.MODULES) h += btn('mod', hid + ':' + mod.id, '', `md_${hid}_${mod.id}`, `data-tip="mod:${hid}:${mod.id}" data-rep="1"`);
-          h += '</div></div>';
-        }
-        h += '</div>';
-      }
-      h += `<h3 class="section-h">SHIPS <span class="sub" data-k="shipcount"></span></h3><div class="list">`;
-      for (const sh of S.ships) {
-        h += `<div class="shiprow slot" data-tip="ship:${sh.id}">${rk(sh.hull, 34)}
+      const head = (M.flags.autobuy ? `<div class="seg"><span class="tog">AUTO-BUY</span>${btn('autobuy', 'pads', '', 'ab_pads')}${btn('autobuy', 'ships', '', 'ab_ships')}${btn('autobuy', 'modules', '', 'ab_modules')}</div>` : '')
+        + (M.flags.autorepair ? '' : btn('repairall', 0, 'gold', 'repall', 'hidden data-tip="txt:Send every idle ship below 60% hull to repair."'));
+      let h = conHead('Fleet & Infrastructure', 'Keep hulls in shape, buy ships, pads and probes.', head);
+      // owned ships, worn first
+      const ships = S.ships.slice().sort((a, b) => (wornShip(b) - wornShip(a)) || (wornShip(a) ? a.cond - b.cond : 0));
+      let body = '';
+      for (const sh of ships) {
+        body += `<div class="row shiprow ${wornShip(sh) ? 'worn' : ''}" style="--cols:38px minmax(0,1fr) 44px auto" data-tip="ship:${sh.id}">${rk(sh.hull, 34)}
           <div class="smain"><div class="sname">${esc(sh.name)} <span class="hull">${E.HULL[sh.hull].name}</span></div>
           <div class="ssub" data-k="fs_${sh.id}"></div><div class="bar thin cond"><i data-k="fc_${sh.id}"></i></div></div>
-          <div class="seg">${M.flags.flight ? btn('repeat', sh.id, '', 'fr_' + sh.id, 'data-tip="txt:When on, this ship relaunches to its last target as soon as it returns."') : ''}${btn('repair', sh.id, '', 'fp_' + sh.id)}${btn('scrap', sh.id, 'ghost', 'fx_' + sh.id)}</div></div>`;
+          <span class="num cond-n" data-k="fn_${sh.id}"></span>
+          <div class="seg">${M.flags.flight ? btn('repeat', sh.id, 'tiny', 'fr_' + sh.id, 'data-tip="txt:When on, this ship relaunches to its last target as soon as it returns."') : ''}${btn('repair', sh.id, 'tiny', 'fp_' + sh.id)}${btn('scrap', sh.id, 'ghost tiny', 'fx_' + sh.id)}</div></div>`;
       }
-      if (!S.ships.length) h += '<div class="slot teaser">BUY A PROSPECTOR TO START FLYING MISSIONS.</div>';
-      return h + '</div>';
+      if (!S.ships.length) body = '<div class="teaser">BUY A PROSPECTOR TO START FLYING MISSIONS.</div>';
+      h += sect('fleet:ships', 'Ships', {}, body).replace('</button></h3>', `</button></h3>${S.ships.length ? '<span class="count" data-k="shipcount"></span>' : ''}`);
+      // shipyard: unlocked hulls as dense rows, locked ones as one teaser line
+      let yard = '';
+      const locked = [];
+      let nUn = 0;
+      for (const hl of AT.HULLS) {
+        if (hl.region > S.region) continue;
+        if (!E.hullUnlocked(hl, M)) { locked.push(hl); continue; }
+        nUn++;
+        yard += `<div class="row hullrow" style="--cols:44px minmax(0,1fr) auto" data-tip="hull:${hl.id}">${rk(hl.id, 40, 'lg')}
+          <div class="smain"><div class="sname">${hl.name} <span class="dim hdesc">${hl.desc}</span></div>
+          <div class="hstats"><span>CARGO <b>${fmt(hl.cargo)}t</b></span><span>SPEED <b>${hl.speed}</b></span><span>RELIAB <b>${Math.round(hl.rel * 100)}%</b></span><span>DRILL <b>${fmt(hl.drill)}t/s</b></span></div></div>
+          ${btn('buyship', hl.id, 'gold', 'bs_' + hl.id)}</div>`;
+      }
+      if (locked.length) {
+        const nx = locked[0], rs = E.RES[nx.unlock];
+        yard += `<div class="hullcard locked"><span class="teaser">LOCKED: ${nx.name.toUpperCase()}${rs ? ' (RESEARCH ' + rs.name.toUpperCase() + ')' : ''}${locked.length > 1 ? ' +' + (locked.length - 1) + ' MORE' : ''}</span></div>`;
+      }
+      h += sect('fleet:yard', 'Shipyard', { count: nUn }, yard);
+      // infrastructure
+      const infra = (img, name, key) => `<div class="row infra" style="--cols:30px minmax(0,1fr) auto">${SPR.img(img)}<div class="smain"><div class="sname">${name}</div><div class="ssub wrap" data-k="${key}_txt"></div></div>${btn(key, 0, '', key + '_btn')}</div>`;
+      h += sect('fleet:infra', 'Infrastructure', {}, infra('pad', 'Launch Pads', 'pad') + infra('scope', 'Observatory', 'obs') + infra('probe', 'Survey Probes', 'probe'));
+      // fleet-wide upgrades
+      const owned = [...new Set(S.ships.map((s) => s.hull))];
+      if (owned.length) {
+        let mods = '';
+        for (const hid of owned) {
+          mods += `<div class="row modrow" style="--cols:38px 96px minmax(0,1fr)">${rk(hid, 28)}<b>${E.HULL[hid].name}</b><div class="seg">`;
+          for (const mod of AT.MODULES) mods += btn('mod', hid + ':' + mod.id, 'tiny', `md_${hid}_${mod.id}`, `data-tip="mod:${hid}:${mod.id}" data-rep="1"`);
+          mods += '</div></div>';
+        }
+        h += sect('fleet:mods', 'Fleet upgrades', { ctl: '<span class="hint">apply to every ship of a hull</span>' }, mods);
+      }
+      return h;
     },
     update(S, M) {
       const v = {};
       const mp = E.maxPads(M);
-      v.pad_txt = `${S.pads} built (max ${mp}). Each pad lets one more mission fly at the same time. ${E.padsFree()} free now.`;
+      v.pad_txt = `${S.pads} built (max ${mp}) · ${E.padsFree()} free. One mission per pad.`;
       v.pad_btn = { h: S.pads >= mp ? 'MAXED<small>—</small>' : `BUILD PAD<small>${money(E.padCost(M))}</small>`, dis: S.pads >= mp || S.money < E.padCost(M) };
-      v.obs_txt = `Level ${S.obs}. Finds a target every ${AT.fmtTime(E.discoveryInterval(M))}. Tracks up to ${E.targetCap(M)}.`;
+      v.obs_txt = `Level ${S.obs} · a find every ${AT.fmtTime(E.discoveryInterval(M))}, tracks ${E.targetCap(M)}.`;
       v.obs_btn = { h: S.obs >= AT.OBS.max ? 'MAXED<small>—</small>' : `UPGRADE<small>${money(E.obsCost(M))}</small>`, dis: S.obs >= AT.OBS.max || S.money < E.obsCost(M) };
-      v.probe_txt = `${S.probes} probe${S.probes > 1 ? 's' : ''}. ${S.surveys.length} surveying now. More probes run more surveys at once.`;
+      v.probe_txt = `${S.probes} probe${S.probes > 1 ? 's' : ''} · ${S.surveys.length} surveying now.`;
       v.probe_btn = { h: S.probes >= AT.PROBE.max ? 'MAXED<small>—</small>' : `BUY PROBE<small>${money(E.probeCost(M))}</small>`, dis: S.probes >= AT.PROBE.max || S.money < E.probeCost(M) };
       if (M.flags.autobuy) for (const k of ['pads', 'ships', 'modules']) v['ab_' + k] = { t: k.toUpperCase(), cls: { on: S.autobuy[k] } };
       for (const hl of AT.HULLS) if (E.hullUnlocked(hl, M)) { const c = E.shipPrice(hl.id, M); v['bs_' + hl.id] = { h: `BUY<small>${money(c)}</small>`, dis: S.money < c }; }
@@ -371,13 +394,17 @@
         const lv = E.moduleLevel(hid, mod.id), mx = E.moduleMax(mod), c = E.moduleCost(hid, mod, M);
         v[`md_${hid}_${mod.id}`] = { h: `${mod.name.split(' ')[0].toUpperCase()} ${lv}/${mx}<small>${lv >= mx ? 'MAX' : money(c)}</small>`, dis: lv >= mx || S.money < c };
       }
-      v.shipcount = `${S.ships.length} owned · ${S.missions.length} flying`;
+      const worn = S.ships.filter((s) => s.state === 'idle' && wornShip(s)).length;
+      v.repall = { h: `REPAIR WORN (${worn})`, hide: !worn };
+      const nw = S.ships.filter(wornShip).length;
+      v.shipcount = `${S.ships.length} owned · ${S.missions.length} flying${nw ? ' · ' + nw + ' worn' : ''}`;
       for (const sh of S.ships) {
         const pilot = sh.pilot ? E.pilotById(sh.pilot) : null;
-        const st = sh.state === 'mission' ? 'ON MISSION' : sh.state === 'repair' ? `IN REPAIR ${Math.ceil(sh.repairT)}s` : 'READY';
+        const st = sh.state === 'mission' ? 'On mission' : sh.state === 'repair' ? `In repair ${Math.ceil(sh.repairT)}s` : 'Ready';
         const tgt = sh.lastTarget && E.targetById(sh.lastTarget);
-        v['fs_' + sh.id] = `${st} · ${pilot ? pilot.name + ' (L' + pilot.level + ')' : M.flags.aipilots ? 'AI pilot' : M.flags.autopilot ? 'Autopilot' : 'NO PILOT'} · ${sh.missions} missions${tgt ? ' · last: ' + tgt.name : ''}`;
+        v['fs_' + sh.id] = `${st} · ${pilot ? pilot.name + ' (L' + pilot.level + ')' : M.flags.aipilots ? 'AI pilot' : M.flags.autopilot ? 'Autopilot' : 'NO PILOT'} · ${sh.missions} missions${tgt && sh.state !== 'mission' ? ' · last: ' + tgt.name : ''}`;
         v['fc_' + sh.id] = { w: sh.cond * 100, cls: { bad: sh.cond < 0.5 } };
+        v['fn_' + sh.id] = { t: Math.round(sh.cond * 100) + '%', cls: { 'd-down': sh.cond < 0.5, 'd-mid': sh.cond >= 0.5 && sh.cond < 0.8, 'd-up': sh.cond >= 0.8 } };
         if (M.flags.flight) v['fr_' + sh.id] = { t: sh.repeat ? 'REPEAT ON' : 'REPEAT OFF', cls: { on: sh.repeat } };
         const rc = E.rushCost(sh, M);
         v['fp_' + sh.id] = sh.state === 'repair' ? { h: `RUSH<small>${money(rc)}</small>`, dis: S.money < rc } : { h: `REPAIR<small>${sh.cond >= 0.999 ? 'OK' : AT.fmtTime(E.repairTime(sh, M))}</small>`, dis: sh.cond >= 0.999 || sh.state !== 'idle' };
@@ -1357,6 +1384,7 @@
       case 'probe': ok = E.buyProbe(); AT.audio.play(ok ? 'buy' : 'deny'); break;
       case 'repeat': E.toggleRepeat(+arg); break;
       case 'repair': { const sh = E.shipById(+arg); ok = sh && sh.state === 'repair' ? E.rush(+arg) : E.repair(+arg); AT.audio.play(ok ? 'buy' : 'deny'); break; }
+      case 'repairall': { ok = false; for (const sh of S.ships) if (sh.state === 'idle' && sh.cond < 0.6 && E.repair(sh.id)) ok = true; AT.audio.play(ok ? 'buy' : 'deny'); break; }
       case 'scrap': { const now = performance.now(); if (!(confirmUntil['scrap' + arg] > now)) { confirmUntil['scrap' + arg] = now + 3000; el.innerHTML = 'SURE?<small>click again</small>'; return; } ok = E.scrapShip(+arg); sig = null; break; }
       case 'autobuy': S.autobuy[arg] = !S.autobuy[arg]; break;
       case 'hirepilot': ok = !!E.hirePilot(+arg); AT.audio.play(ok ? 'buy' : 'deny'); break;
