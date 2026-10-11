@@ -6,13 +6,24 @@ out = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/claude-0/shots');
 url = (root / 'steam/game/index.html').as_uri()
 errors = []
 W = int(sys.argv[2]) if len(sys.argv) > 2 else 1366
+H = int(sys.argv[4]) if len(sys.argv) > 4 else 800
+TEXT = sys.argv[3] if len(sys.argv) > 3 else None  # optional: normal | large | xl
+SCAN = """() => { const out = []; const de = document.documentElement;
+  if (de.scrollWidth > de.clientWidth) out.push('PAGE scrollWidth ' + de.scrollWidth + ' > ' + de.clientWidth);
+  for (const e of document.querySelectorAll('body *')) { if (e.closest('svg') || !e.offsetParent) continue; const cs = getComputedStyle(e);
+    if (e.scrollWidth > e.clientWidth + 1 && cs.overflowX !== 'auto' && cs.overflowX !== 'scroll' && cs.textOverflow !== 'ellipsis' && e.clientWidth > 0) out.push((e.tagName + '.' + e.className + ' ' + e.scrollWidth + '>' + e.clientWidth + ' ' + (e.textContent || '').trim().slice(0, 30)));
+    const r = e.getBoundingClientRect(); const c = e.closest('.tabbody, main, #modal'); if (c && e.matches('button.btn') && (r.right > c.getBoundingClientRect().right + 1 || r.left < c.getBoundingClientRect().left - 1)) out.push('CLIPPED-X ' + e.className + ' ' + e.textContent.trim().slice(0, 20)); }
+  return out.slice(0, 12); }"""
+scans = {}
 with sync_playwright() as p:
     exe = os.environ.get('CHROMIUM_PATH') or ('/opt/pw-browsers/chromium' if pathlib.Path('/opt/pw-browsers/chromium').exists() else None)
     b = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
-    pg = b.new_page(viewport={'width': W, 'height': 800})
+    pg = b.new_page(viewport={'width': W, 'height': H})
     pg.on('console', lambda m: errors.append(f'{m.type}: {m.text}') if m.type in ('error',) else None)
     pg.on('pageerror', lambda e: errors.append(f'pageerror: {e}'))
     pg.goto(url); pg.wait_for_timeout(1500)
+    if TEXT:
+        pg.evaluate("t => { AT.E.S.settings.textSize = t; document.documentElement.dataset.text = t; }", TEXT); pg.wait_for_timeout(300)
     pg.screenshot(path=str(out / '00_start.png'))
     # opening: buy a ship, pick the surveyed target, launch
     pg.click('[data-act=tab][data-arg=fleet]'); pg.wait_for_timeout(200)
@@ -38,6 +49,8 @@ with sync_playwright() as p:
         if pg.locator(f'[data-act=tab][data-arg={t}]').count():
             pg.click(f'[data-act=tab][data-arg={t}]'); pg.wait_for_timeout(350)
             pg.screenshot(path=str(out / f'10_{t}.png'))
+            r = pg.evaluate(SCAN)
+            if r: scans[t] = r
         else: errors.append(f'missing tab {t}')
     pg.click('[data-act=view][data-arg=launch]'); pg.wait_for_timeout(500); pg.screenshot(path=str(out / '11_launchmid.png'))
     pg.click('[data-act=view][data-arg=target]'); pg.wait_for_timeout(500); pg.screenshot(path=str(out / '12_closeup.png'))
@@ -55,4 +68,5 @@ with sync_playwright() as p:
     sw = pg.evaluate('document.documentElement.scrollWidth')
     if sw > 420: errors.append(f'horizontal overflow at phone width: {sw}px')
     b.close()
+if scans: print('OVERFLOW', json.dumps(scans, indent=1))
 print(json.dumps(errors[:20], indent=1) if errors else 'no console errors')
