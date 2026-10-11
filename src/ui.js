@@ -946,10 +946,10 @@
   function resetMonitor() { deckStruct = ''; deckHtml = ''; opsAt = -1; actDirty = true; unread = 0; unreadHot = false; if (drawerOpen) fillDrawer(); }
   // how many flight rows fit under the viewport
   function deckRoom() {
-    const mon = $('#monitor'), vp = $('.viewport');
+    const mon = $('#monitor'), dk = $('#deck');
     if (getComputedStyle(mon).overflow !== 'hidden') return 6; // single column: the page scrolls
     const row = $('#deck .frow'), rh = row ? row.offsetHeight : 40;
-    const avail = mon.clientHeight - vp.offsetHeight - 8 - 96;
+    const avail = dk.clientHeight - 90; // /* === monitor sizing === */ the deck has a fixed reserved height; minus its head, foot and padding
     return Math.max(2, Math.min(10, Math.floor(avail / Math.max(24, rh))));
   }
   function bestPair(S, M) {

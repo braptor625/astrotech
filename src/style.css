@@ -147,7 +147,7 @@ html[data-text="normal"] { --rail-w: 164px; } html[data-text="xl"] { --rail-w: 1
 }
 
 /* ---------- viewport (monitor) ---------- */
-.viewport { padding: 6px; display: grid; gap: 6px; flex: none; }
+.viewport { padding: 6px; display: flex; flex-direction: column; gap: 6px; flex: 1 1 0; min-height: 0; } /* === monitor sizing === the viewport takes the column height the deck leaves */
 .vbar { display: flex; gap: 4px 8px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
 .vregs { display: inline-flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
 .segctl { display: inline-flex; background: var(--slot-lo); box-shadow: 0 0 0 2px var(--edge); }
@@ -157,8 +157,8 @@ html[data-text="normal"] { --rail-w: 164px; } html[data-text="xl"] { --rail-w: 1
 .segctl .btn.on { background: var(--gold); color: #2a1a00; }
 .segctl .btn:active { transform: none; }
 .segctl .btn:focus-visible { outline-offset: -3px; }
-.scene-wrap { position: relative; background: #000; overflow: hidden; max-width: 100%; box-shadow: 0 0 0 3px var(--edge); }
-.scene-wrap canvas { width: 100%; aspect-ratio: 16 / 9; display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+.scene-wrap { position: relative; background: #000; overflow: hidden; max-width: 100%; box-shadow: 0 0 0 3px var(--edge); flex: 1 1 0; min-height: 0; } /* === monitor sizing === min/max-height (16:9 .. 4:5) are set by SC.resize */
+.scene-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; /* === monitor sizing === */ image-rendering: pixelated; image-rendering: crisp-edges; }
 .scene-wrap.scan::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.16) 2px 3px); }
 .strike-banner { position: absolute; right: 8px; top: 6px; font-family: var(--f-display); font-size: var(--fs-s); color: #fff; background: var(--bad); padding: 3px 6px; animation: blink 0.8s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0.25; } }
@@ -170,7 +170,7 @@ html[data-text="normal"] { --rail-w: 164px; } html[data-text="xl"] { --rail-w: 1
 @keyframes tickin { from { opacity: 0; transform: translateX(-12px); } }
 
 /* decision cards over the viewport */
-#cardbox { position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); width: min(560px, calc(100% - 20px)); max-height: calc(100% - 40px); overflow-y: auto; z-index: 5; }
+#cardbox { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); width: min(560px, calc(100% - 20px)); max-height: calc(100% - 44px); /* === monitor sizing === top-anchored: the tall viewport's bottom edge sits under the fixed briefing card */ overflow-y: auto; z-index: 5; }
 .dcard { padding: 10px 12px; display: grid; gap: 6px; animation: cardin 0.3s steps(3); }
 .dcard h3 { color: var(--gold); font-size: var(--fs-m); }
 .dcard p { margin: 0; color: var(--ink); font-size: var(--fb-m); }
@@ -179,7 +179,11 @@ html[data-text="normal"] { --rail-w: 164px; } html[data-text="xl"] { --rail-w: 1
 @keyframes cardin { from { transform: translateY(40px); opacity: 0; } }
 
 /* ---------- flight deck and ops summary (under the viewport) ---------- */
-#deck { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+/* === monitor sizing === the deck reserves a fixed height so the viewport never jumps when flights start and end */
+:root { --deck-h: clamp(176px, 21vh, 250px); }
+html[data-text="large"] { --deck-h: clamp(196px, 23vh, 270px); } html[data-text="xl"] { --deck-h: clamp(220px, 26vh, 300px); }
+#deck { flex: 0 0 var(--deck-h); height: var(--deck-h); min-height: 0; display: flex; flex-direction: column; }
+#deck > .deck, #deck > .ops { flex: 1 1 auto; }
 #deck:empty { display: none; }
 .deck { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; min-height: 0; flex: 0 1 auto; overflow: hidden; }
 .deck-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; }
@@ -457,8 +461,9 @@ img.face.lg { width: 48px; height: 48px; }
   .console { min-height: 70vh; display: block; }
   .tabbody { overflow: visible; container-type: inline-size; }
   .monitor { overflow: visible; }
-  #deck { flex: none; }
+  #deck { flex: none; height: auto; }
   .deck { overflow: visible; }
+  .viewport { flex: none; } .scene-wrap { flex: none; aspect-ratio: 16 / 9; } /* === monitor sizing === */
   .rail { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; flex-direction: row; gap: 2px; padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); overflow-x: auto; overflow-y: hidden; clip-path: none; border-top: 3px solid var(--edge); }
   .rail-g { display: none; }
   .tab { flex: 1 0 auto; grid-template-columns: 1fr; justify-items: center; padding: 8px 9px 7px; min-width: 40px; }
