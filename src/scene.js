@@ -285,7 +285,9 @@
       g.fillStyle = Math.sin(t * 12) > 0 ? '#6be08a' : '#2f8a4a';
       g.fillRect(Math.round(o.x + (p.x - o.x) * f), Math.round(o.y + (p.y - o.y) * f), 1, 1);
     }
-    // missions
+    // missions; ships mining the same target are spread evenly around it so none hides behind another
+    const minersAt = {}, minerIdx = {};
+    for (const m of S.missions) if (m.t >= m.out && m.t < m.out + m.mine) { minerIdx[m.id] = minersAt[m.target] || 0; minersAt[m.target] = minerIdx[m.id] + 1; }
     for (const m of S.missions) {
       const tg = AT.E.targetById(m.target), ship = AT.E.shipById(m.ship);
       if (!tg || !ship || tg.region !== r) continue;
@@ -302,7 +304,10 @@
       }
       if (m.t >= m.out && !arrSeen[m.id]) { arrSeen[m.id] = 1; FX.arrival('map', p.x, p.y); }
       let x = pos.x, y = pos.y;
-      if (mining) { x += Math.cos(t * 2 + m.id) * 4; y += Math.sin(t * 2 + m.id) * 2; }
+      if (mining) {
+        const n = minersAt[m.target], a = t * 0.8 + (minerIdx[m.id] / n) * Math.PI * 2, rr = n > 1 ? 5 + n : 4;
+        x += Math.cos(a) * rr; y += Math.sin(a) * rr * 0.6;
+      }
       const danger = m.outcome === 'lost' && m.failAt - m.t < 2.5;
       if (danger && Math.sin(t * 20) > 0) { g.fillStyle = '#ff6b6b'; g.fillRect(Math.round(x) - 2, Math.round(y) - 2, 5, 5); }
       const img = SPR.mapShip(ship.hull, (p.x - o.x) * dir >= 0 ? 1 : -1);
@@ -610,12 +615,13 @@
     }
     // ships working this target
     const here = S.missions.filter((m) => m.target === tg.id);
-    here.forEach((m, i) => {
+    const miners = here.filter((m) => m.t >= m.out && m.t < m.out + m.mine && AT.E.shipById(m.ship));
+    // spread around the lit side; the step keeps sprites apart however small the body is, and wraps if crowded
+    const step = Math.max(0.45, 18 / (rad + 16)), span = Math.min(Math.PI * 2, step * miners.length);
+    const stepN = miners.length > 1 ? span / (span >= Math.PI * 2 ? miners.length : miners.length - 1) : 0;
+    miners.forEach((m, i) => {
       const ship = AT.E.shipById(m.ship);
-      if (!ship) return;
-      const mining = m.t >= m.out && m.t < m.out + m.mine;
-      if (!mining) return;
-      const a = -0.9 + i * 0.55 + Math.sin(t * 0.5 + i) * 0.05;
+      const a = -0.9 - (span >= Math.PI * 2 ? 0 : (stepN * (miners.length - 1)) / 2) + i * stepN + Math.sin(t * 0.5 + i) * 0.05;
       const ox = cx + Math.cos(a) * (rad + 16), oy = cy + Math.sin(a) * (rad + 16) * 0.9;
       const img = SPR.rocket(ship.hull);
       g.save(); g.translate(Math.round(ox), Math.round(oy)); g.rotate(a - Math.PI / 2); g.drawImage(img, -Math.round(img.width / 2), -Math.round(img.height / 2)); g.restore();
