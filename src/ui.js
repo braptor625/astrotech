@@ -386,59 +386,92 @@
   };
 
   // ----------------------------- CREW -----------------------------
+  let selPilot = null, selOut = null;
+  // First time a section is seen, give it a default collapsed state (the player's choice wins afterwards).
+  const sectDefault = (key, v) => { const c = E.S.settings.collapsed = E.S.settings.collapsed || {}; if (c[key] === undefined) c[key] = v; };
+  const STAFF_ICON = { scientist: 'research', trader: 'market', analyst: 'scope', engineer: 'crew' };
   PANELS.crew = {
-    sig(S, M) { return S.pilots.map((p) => p.id + ':' + p.ship).join(',') + '|' + S.candidates.map((c) => c.id).join(',') + (M.flags.autohire ? 'A' : '') + (M.rules.noStaff ? 'X' : '') + (M.flags.aipilots ? 'I' : ''); },
+    pick(S) { if (!S.pilots.some((p) => p.id === selPilot)) selPilot = S.pilots.length ? S.pilots[0].id : null; return selPilot; },
+    sig(S, M) { return this.pick(S) + '|' + S.pilots.map((p) => p.id + ':' + p.ship).join(',') + '|' + S.candidates.map((c) => c.id).join(',') + '|' + S.memorial.length + (M.flags.autohire ? 'A' : '') + (M.rules.noStaff ? 'X' : '') + (M.flags.aipilots ? 'I' : '') + (M.flags.autopilot ? 'P' : ''); },
     build(S, M) {
-      let h = `${conHead('Crew', 'Pilots fly the ships. Staff boost the company.', '<span class="tog" data-k="payroll"></span>')}
-        <h3 class="section-h">PILOTS <span class="sub">${M.flags.aipilots ? 'optional now. AI pilots fly any empty ship' : 'every ship needs one until you research Autopilot'}</span></h3><div class="list">`;
+      sectDefault('crew:memorial', true);
+      const sel = this.pick(S), sp = S.pilots.find((p) => p.id === sel);
+      let h = conHead('Crew', 'Pilots fly the ships. Staff boost the company.', '<span class="cx-pay" data-k="payroll" data-tip="txt:Everyone is paid per second. If you cannot cover payroll the crew goes on strike and staff stop working."></span>');
+      // ---- pilots: master-detail
+      const need = M.flags.aipilots ? 'AI pilots fly any empty ship' : M.flags.autopilot ? 'ships fly without a pilot, but pilots cut risk' : 'every ship needs a pilot';
+      let list = '';
       for (const p of S.pilots) {
         const tr = AT.TRAITS.find((x) => x.id === p.trait);
-        h += `<div class="prow slot" data-tip="pilot:${p.id}"><img class="face" src="${SPR.portrait(p)}" alt="">
-          <div class="smain"><div class="sname">${esc(p.name)} ${p.founder ? '<span class="hull">FOUNDER</span>' : ''} <span class="lvl" data-k="pl_${p.id}"></span></div>
-          <div class="ssub"><span class="trait">${tr.name}</span> · <span data-k="ps_${p.id}"></span></div><div class="bar thin xp"><i data-k="px_${p.id}"></i></div></div>
-          ${p.founder ? '' : btn('firepilot', p.id, 'ghost', 'pf_' + p.id)}</div>`;
+        list += `<div class="row cx-pilot ${p.id === sel ? 'sel' : ''}" style="--cols:32px minmax(0,1fr) 34px minmax(70px,0.9fr)" role="button" tabindex="0" data-act="selpilot" data-arg="${p.id}" data-tip="pilot:${p.id}"><img class="face" src="${SPR.portrait(p)}" alt="">
+          <div class="cx-nm"><b>${esc(p.name)}</b>${p.founder ? ' <span class="hull">FOUNDER</span>' : ''}<div class="dim trait">${tr.name}</div></div>
+          <span class="num lvl" data-k="pl_${p.id}"></span><span class="dim cx-st" data-k="ps_${p.id}"></span></div>`;
       }
-      h += `</div><h3 class="section-h">CANDIDATES <span class="sub" data-k="candt"></span></h3><div class="cards three">`;
+      let det = '';
+      if (sp) {
+        const tr = AT.TRAITS.find((x) => x.id === sp.trait);
+        det = `<div class="cx-det"><div class="cx-top"><img class="face xl" src="${SPR.portrait(sp)}" alt=""><div><h4>${esc(sp.name)}${sp.founder ? ' <span class="hull">FOUNDER</span>' : ''}</h4><p><span class="trait">${tr.name}</span> <span class="dim">${tr.desc}</span></p></div></div>
+          <div class="cx-lv"><span>LEVEL <b class="lvl" data-k="dl"></b></span><div class="bar thin xp"><i data-k="dxb"></i></div><span class="dim" data-k="dx"></span></div>
+          <dl class="kv"><div><dt>Ship</dt><dd data-k="dsh"></dd></div><div><dt>Mission risk</dt><dd data-k="drk"></dd></div><div><dt>Salary</dt><dd data-k="dsal"></dd></div></dl>
+          ${sp.founder ? '<p class="dim cx-note">The founder never leaves the company.</p>' : `<div class="cx-acts">${btn('firepilot', sp.id, 'bad tiny', 'dpf')}</div>`}</div>`;
+      }
+      const pilots = S.pilots.length ? `<div class="md"><div class="md-list">${list}</div><div class="md-detail">${det}</div></div>` : '<p class="empty">No pilots yet. Hire one from the candidates below.</p>';
+      h += sect('crew:pilots', 'Pilots', { count: S.pilots.length, ctl: `<span class="dim cx-hint">${need}</span>` }, pilots);
+      // ---- candidates
+      let cl = '';
       for (const c of S.candidates) {
         const tr = AT.TRAITS.find((x) => x.id === c.trait);
-        h += `<div class="card slot cand" data-tip="trait:${c.trait}"><div class="flex"><img class="face lg" src="${SPR.portrait(c)}" alt=""><div><h4>${esc(c.name)}</h4><p>Level ${c.level} · <span class="trait">${tr.name}</span></p></div></div><p>${tr.desc}</p>${btn('hirepilot', c.id, 'gold', 'hc_' + c.id)}</div>`;
+        cl += `<div class="row cx-cand" style="--cols:32px minmax(0,1fr) minmax(0,1.3fr) auto" data-tip="trait:${c.trait}"><img class="face" src="${SPR.portrait(c)}" alt="">
+          <div class="cx-nm"><b>${esc(c.name)}</b><div class="dim">Level ${c.level}</div></div><div class="cx-fx"><span class="trait">${tr.name}</span> <span class="dim">${tr.desc}</span></div>${btn('hirepilot', c.id, 'gold tiny', 'hc_' + c.id)}</div>`;
       }
-      h += `</div><div class="flex" style="margin:6px 0 4px">${btn('refreshcand', 0, '', 'refreshcand')}</div>
-        <h3 class="section-h">STAFF ${M.flags.autohire ? btn('autohire', 0, '', 'autohire') : ''}</h3><div class="list">`;
+      if (!S.candidates.length) cl = '<p class="empty">No candidates right now. A new batch arrives soon.</p>';
+      h += sect('crew:cands', 'Candidates', { count: S.candidates.length, ctl: `<span class="dim" data-k="candt"></span>${btn('refreshcand', 0, 'tiny', 'refreshcand')}` }, cl);
+      // ---- staff
+      let sl = '<div class="row hdr" style="--cols:28px minmax(0,1fr) 34px 64px auto auto"><span></span><span>Role</span><span class="num">Own</span><span class="num" data-tip="txt:Salary per second for this role.">Pay/s</span><span></span><span></span></div>';
       for (const c of AT.STAFF) {
-        h += `<div class="row slot" data-tip="staff:${c.id}"><div class="art"><img src="${SPR.icon(c.id === 'scientist' ? 'research' : c.id === 'trader' ? 'market' : c.id === 'analyst' ? 'scope' : 'crew')}" alt="" style="width:30px;height:30px"></div>
-          <div class="meta"><div class="name">${c.name}s <span class="own" data-k="c_${c.id}_n"></span></div><div class="line" data-k="c_${c.id}_fx"></div></div>
-          <div class="acts">${btn('fire', c.id, 'ghost', 'c_' + c.id + '_fire')}${btn('hire', c.id, 'gold', 'c_' + c.id + '_hire', 'data-rep="1"')}</div></div>`;
+        sl += `<div class="row cx-staff" style="--cols:28px minmax(0,1fr) 34px 64px auto auto" data-tip="staff:${c.id}"><img class="ico pixel" src="${SPR.icon(STAFF_ICON[c.id] || 'crew')}" alt="">
+          <div class="cx-nm"><b>${c.name}s</b><div class="dim" data-k="c_${c.id}_fx"></div></div><span class="num lvl" data-k="c_${c.id}_n"></span><span class="num dim" data-k="c_${c.id}_sal"></span>
+          ${btn('fire', c.id, 'ghost tiny', 'c_' + c.id + '_fire')}${btn('hire', c.id, 'gold tiny', 'c_' + c.id + '_hire', 'data-rep="1"')}</div>`;
       }
-      return h + '</div>';
+      h += sect('crew:staff', 'Staff', { count: AT.STAFF.reduce((a, c) => a + S.staff[c.id], 0), ctl: M.flags.autohire ? btn('autohire', 0, 'tiny', 'autohire') : '' }, sl);
+      // ---- memorial
+      const mem = S.memorial.length ? S.memorial.slice().reverse().map((m) => `<div class="row" style="--cols:minmax(0,1fr) auto"><span><b>${esc(m.name)}</b> <span class="dim">L${m.level} · ${esc(m.ship)}</span></span><span class="dim">${esc(m.target)}</span></div>`).join('') : '<p class="empty">No names yet. Lost ships take their pilots with them.</p>';
+      return h + sect('crew:memorial', 'Memorial Wall', { count: S.memorial.length }, mem);
     },
     update(S, M) {
       const v = {};
       const pay = E.salaryRate(M);
-      v.payroll = { t: S.strike ? `STRIKE: PAYROLL ${money(pay)}/s UNPAID` : `PAYROLL ${money(pay)}/s`, cls: { 'd-down': S.strike } };
+      v.payroll = { t: S.strike ? `STRIKE · PAYROLL ${money(pay)}/s UNPAID` : `PAYROLL ${money(pay)}/s`, cls: { 'd-down': S.strike } };
       for (const p of S.pilots) {
         const sh = p.ship ? E.shipById(p.ship) : null;
         v['pl_' + p.id] = 'L' + p.level;
-        v['ps_' + p.id] = `${sh ? 'flies ' + sh.name : p.injured > S.time ? `recovering ${Math.ceil(p.injured - S.time)}s` : 'waiting for a ship'} · risk -${Math.round((1 - Math.pow(0.94, p.level - 1)) * 100)}% · ${money(E.pilotSalary(p, M))}/s`;
-        v['px_' + p.id] = { w: p.level >= AT.PILOT.maxLevel ? 100 : p.xp / E.xpNeed(p) * 100 };
-        if (!p.founder) v['pf_' + p.id] = { h: 'FIRE<small>—</small>', dis: !!(sh && sh.state === 'mission') };
+        v['ps_' + p.id] = sh ? sh.name : p.injured > S.time ? `hurt ${Math.ceil(p.injured - S.time)}s` : 'no ship';
+        if (p.id === selPilot) {
+          v.dl = p.level + (p.level >= AT.PILOT.maxLevel ? ' MAX' : '');
+          v.dxb = { w: p.level >= AT.PILOT.maxLevel ? 100 : p.xp / E.xpNeed(p) * 100 };
+          v.dx = p.level >= AT.PILOT.maxLevel ? 'max level' : `${fmt(p.xp)}/${fmt(E.xpNeed(p))} XP`;
+          v.dsh = sh ? `Flies ${sh.name}${sh.state === 'mission' ? ' (on mission)' : ''}` : p.injured > S.time ? `Recovering ${Math.ceil(p.injured - S.time)}s` : 'Waiting for a ship';
+          v.drk = '-' + Math.round((1 - Math.pow(0.94, p.level - 1)) * 100) + '%';
+          v.dsal = money(E.pilotSalary(p, M)) + '/s';
+          if (!p.founder) v.dpf = { h: 'FIRE', dis: !!(sh && sh.state === 'mission'), tip: 'txt:' + (sh && sh.state === 'mission' ? 'Cannot fire a pilot who is on a mission.' : 'Fire this pilot. Their ship goes without one.') };
+        }
       }
-      v.candt = `new candidates in ${Math.ceil(180 - S.candT)}s`;
-      for (const c of S.candidates) { const cost = E.pilotCost(c, M); v['hc_' + c.id] = { h: `HIRE<small>${money(cost)}</small>`, dis: S.money < cost }; }
+      v.candt = `next batch ${Math.max(0, Math.ceil(180 - S.candT))}s`;
+      for (const c of S.candidates) { const cost = E.pilotCost(c, M); v['hc_' + c.id] = { h: `HIRE ${money(cost)}`, dis: S.money < cost, tip: 'txt:' + (S.money < cost ? 'Not enough cash.' : 'Hire ' + c.name + '.') }; }
       const rc = E.pilotCost({ level: 1 }, M) * 0.2;
-      v.refreshcand = { h: `NEW CANDIDATES<small>${money(rc)}</small>`, dis: S.money < rc };
+      v.refreshcand = { h: `REROLL ${money(rc)}`, dis: S.money < rc, tip: 'txt:' + (S.money < rc ? 'Not enough cash.' : 'Replace the candidates with a fresh batch.') };
       for (const c of AT.STAFF) {
         const n = S.staff[c.id];
         v[`c_${c.id}_n`] = String(n);
         let fx = '';
         if (c.id === 'engineer') fx = `Repairs +${n * 15}% faster · upgrades -${Math.round((1 - Math.max(0.5, Math.pow(0.98, n))) * 100)}%`;
-        if (c.id === 'trader') fx = `Market depth +${n * 12}% · recovery +${n * 6}% · contracts +${n * 3}%`;
+        if (c.id === 'trader') fx = `Depth +${n * 12}% · recovery +${n * 6}% · contracts +${n * 3}%`;
         if (c.id === 'scientist') fx = `${fmt(E.rpRate(M))} research/s total`;
         if (c.id === 'analyst') fx = `Discovery +${n * 12}% · surveys ${Math.round((1 - Math.max(0.25, Math.pow(0.95, n))) * 100)}% faster`;
         v[`c_${c.id}_fx`] = fx;
+        v[`c_${c.id}_sal`] = n ? money(c.cost * (Math.pow(c.growth, n) - 1) / (c.growth - 1) * AT.SALARY_RATE * M.salary * M.hire) : '-';
         const cost = E.hireCost(c.id, M);
-        v[`c_${c.id}_hire`] = { h: M.rules.noStaff ? 'BLOCKED<small>challenge</small>' : `HIRE<small>${money(cost)}</small>`, dis: M.rules.noStaff || S.money < cost };
-        v[`c_${c.id}_fire`] = { h: 'FIRE<small>-1</small>', dis: n <= 0 };
+        v[`c_${c.id}_hire`] = { h: M.rules.noStaff ? 'BLOCKED' : `HIRE ${money(cost)}`, dis: M.rules.noStaff || S.money < cost, tip: 'txt:' + (M.rules.noStaff ? 'Staff are blocked in this challenge.' : S.money < cost ? 'Not enough cash.' : 'Hire a ' + c.name + '.') };
+        v[`c_${c.id}_fire`] = { h: 'FIRE', dis: n <= 0, tip: 'txt:' + (n <= 0 ? 'None to let go.' : 'Let one go.') };
       }
       if (M.flags.autohire) v.autohire = { t: S.autohire ? 'AUTO-HIRE ON' : 'AUTO-HIRE OFF', cls: { on: S.autohire } };
       return v;
@@ -448,27 +481,36 @@
   // ----------------------------- MARKET -----------------------------
   PANELS.market = {
     ores(S) { return Object.keys(AT.ORES).filter((id) => AT.ORES[id].region <= S.region && (S.ores[id] > 0 || S.market[id].inflow > 0 || AT.ORES[id].region === S.region || id === 'iron')); },
-    sig(S, M) { return this.ores(S).join() + '|' + S.contracts.map((c) => c.id).join() + (M.flags.autosell ? 'A' : '') + (M.flags.analytics ? 'N' : ''); },
+    // deliverable contracts first, then by time left
+    contracts(S) { return S.contracts.slice().sort((a, b) => (E.contractReady(b) ? 1 : 0) - (E.contractReady(a) ? 1 : 0) || a.expires - b.expires); },
+    shown(S) { return !!S.reveal.contracts || S.contracts.length > 0; },
+    sig(S, M) { return this.ores(S).join() + '|' + this.contracts(S).map((c) => c.id + (E.contractReady(c) ? '!' : '')).join() + (this.shown(S) ? 'C' : '') + (M.flags.autosell ? 'A' : '') + (M.flags.analytics ? 'N' : ''); },
     build(S, M) {
-      let h = conHead('Market & Contracts', 'Sell ore and deliver client contracts.', btn('sellall', 0, 'gold big', 'sellall'));
-      h += `<h3 class="section-h">${SPR.img('contract')} CLIENT CONTRACTS <span class="sub" data-k="repline"></span></h3><div class="bar rep"><i data-k="repbar"></i></div><div class="cards contracts">`;
-      if (!S.contracts.length) h += `<div class="slot teaser" style="grid-column:1/-1">NO CONTRACTS ON THE BOARD. NEW CLIENTS CALL EVERY FEW MINUTES.</div>`;
-      for (const c of S.contracts) {
-        h += `<div class="card slot contract"><div class="spread"><h4>${esc(c.client)}</h4>${btn('dismiss', c.id, 'ghost tiny', '', 'data-tip="txt:Decline this contract. Costs 1 reputation."')}</div>
-          <p>${E.contractText(c)}</p><div class="bar"><i data-k="cp_${c.id}"></i></div>
-          <div class="spread"><span data-k="ct_${c.id}"></span><span class="gold">${money(c.reward)} · +${c.rep} REP</span></div>${btn('deliver', c.id, 'gold', 'cd_' + c.id)}</div>`;
-      }
-      h += `</div><h3 class="section-h">${SPR.img('market')} ORE EXCHANGE</h3><p class="note">Big sales flood the market and push that ore's price down. Prices recover over time. Selling into strong demand pays best.</p>`;
-      if (M.flags.autosell) h += `<div class="slot spread" style="margin-bottom:8px"><span class="tog">AUTO-SELL</span><div class="seg">${[['off', 'OFF'], ['always', 'ALWAYS'], ['80', 'DEMAND ≥ 80%'], ['100', 'DEMAND ≥ 100%']].map(([m, l]) => `<button class="btn" data-act="autosell" data-arg="${m}" data-k="as_${m}">${l}</button>`).join('')}</div></div>`;
-      h += '<div class="list">';
+      sectDefault('market:auto', true);
+      let h = conHead('Market', 'Sell ore and deliver client contracts.', btn('sellall', 0, 'gold big', 'sellall'));
+      const cols = '28px minmax(56px,1fr) 2.8em 3.6em 3em 50px 2.1em 5.2em';
+      let ores = `<div class="row hdr" style="--cols:${cols}"><span></span><span>Ore</span><span class="num">Hold</span><span class="num">Price</span><span class="num" data-tip="txt:Demand. Big sales flood the market and push that ore's price down. Prices recover over time. Selling into strong demand pays best.">Dem.</span><span></span><span></span><span></span></div>`;
       for (const id of this.ores(S)) {
-        h += `<div class="mrow slot" data-tip="ore:${id}"><img class="ico lg pixel" src="${SPR.oreIcon(id)}" alt="">
-          <div><div class="nm">${AT.ORES[id].name}</div><div class="held" data-k="h_${id}"></div></div>
-          <div class="px-col"><div data-k="p_${id}"></div><div class="held" data-k="d_${id}"></div></div>
-          <canvas width="48" height="14" class="px" data-spark="${id}"></canvas>
-          <div class="seg">${btn('sell', id + ':0.25', '', 's25_' + id)}${btn('sell', id + ':1', 'gold', 'sall_' + id)}</div></div>`;
+        ores += `<div class="row mk-ore" style="--cols:${cols}" data-tip="ore:${id}"><img class="ico pixel" src="${SPR.oreIcon(id)}" alt="">
+          <b>${AT.ORES[id].name}</b><span class="num" data-k="h_${id}"></span><span class="num" data-k="p_${id}"></span><span class="num" data-k="d_${id}"></span>
+          <canvas width="48" height="14" class="px" data-spark="${id}"></canvas>${btn('sell', id + ':0.25', 'tiny', 's25_' + id)}${btn('sell', id + ':1', 'gold tiny', 'sall_' + id)}</div>`;
       }
-      return h + '</div>';
+      h += sect('market:ore', 'Ore Exchange', { count: this.ores(S).length }, ores);
+      if (this.shown(S)) {
+        const list = this.contracts(S);
+        let cs = '<div class="mk-rep"><span class="dim" data-k="repline"></span><div class="bar rep"><i data-k="repbar"></i></div></div>';
+        if (!list.length) cs += '<p class="empty">No contracts on the board. Clients call every few minutes.</p>';
+        for (const c of list) {
+          const rdy = E.contractReady(c);
+          cs += `<div class="row mk-con ${rdy ? 'sel' : ''}" style="--cols:minmax(0,1fr) auto auto auto"><div class="cx-nm"><b class="ice">${esc(c.client)}</b><div class="dim">${E.contractText(c)}</div><div class="bar thin"><i data-k="cp_${c.id}"></i></div></div>
+            <div class="num"><span class="gold">${money(c.reward)}</span><div class="dim">+${c.rep} REP</div></div><span class="num dim" data-k="ct_${c.id}"></span>
+            <span class="mk-acts">${btn('deliver', c.id, 'gold tiny', 'cd_' + c.id)}${btn('dismiss', c.id, 'ghost tiny', '', 'data-tip="txt:Decline this contract. Costs 1 reputation." aria-label="Decline contract"').replace('></button>', '>X</button>')}</span></div>`;
+        }
+        const ready = list.filter((c) => E.contractReady(c)).length;
+        h += sect('market:contracts', 'Contracts', { count: ready ? ready + ' ready / ' + list.length : list.length }, cs);
+      } else h += '<p class="empty">Sell some ore to start attracting client contracts.</p>';
+      if (M.flags.autosell) h += sect('market:auto', 'Auto-sell', { ctl: '<span class="dim" data-k="asnow"></span>' }, `<div class="seg">${[['off', 'OFF'], ['always', 'ALWAYS'], ['80', 'DEMAND ≥ 80%'], ['100', 'DEMAND ≥ 100%']].map(([m, l]) => `<button class="btn tiny" data-act="autosell" data-arg="${m}" data-k="as_${m}">${l}</button>`).join('')}</div><p class="dim cx-note">Sells ore on its own once demand reaches the threshold.</p>`);
+      return h;
     },
     update(S, M) {
       const v = {};
@@ -477,24 +519,26 @@
         const m = S.market[id], q = S.ores[id];
         const est = E.sellEstimate(id, 1, M);
         total += est;
-        v['h_' + id] = 'Hold: ' + fmt(q) + 't';
+        v['h_' + id] = { t: fmt(q) + 't', cls: { dim: q <= 0 } };
         v['p_' + id] = money(E.price(id, M)) + '/t';
         let trend = '';
         if (M.flags.analytics) { const d = m.t - m.d; trend = d > 0.03 ? ' ↑' : d < -0.03 ? ' ↓' : ' →'; }
-        v['d_' + id] = { t: 'Demand ' + Math.round(m.d * 100) + '%' + trend, cls: { 'd-up': m.d > 1.05, 'd-down': m.d < 0.85 } };
-        v['s25_' + id] = { t: '25%', dis: q <= 0 };
-        v['sall_' + id] = { h: `ALL<small>${money(est)}</small>`, dis: q <= 0 };
+        v['d_' + id] = { t: Math.round(m.d * 100) + '%' + trend, cls: { 'd-up': m.d > 1.05, 'd-down': m.d < 0.85 } };
+        v['s25_' + id] = { t: '25%', dis: q <= 0, tip: 'txt:' + (q <= 0 ? 'Nothing in the hold.' : 'Sell a quarter of the hold.') };
+        v['sall_' + id] = { h: `ALL ${money(est)}`, dis: q <= 0, tip: 'txt:' + (q <= 0 ? 'Nothing in the hold.' : 'Sell the whole hold of this ore.') };
       }
-      v.sellall = { h: `SELL EVERYTHING<small>≈ ${money(total)}</small>`, dis: total <= 0 };
+      v.sellall = { h: `SELL EVERYTHING<small>≈ ${money(total)}</small>`, dis: total <= 0, tip: 'txt:' + (total <= 0 ? 'The hold is empty. Fly missions to bring ore home.' : "Sell every ore in the hold at today's prices.") };
       for (const m of ['off', 'always', '80', '100']) v['as_' + m] = { cls: { on: S.autosell === m } };
+      v.asnow = { off: 'OFF', always: 'ALWAYS', 80: 'DEMAND ≥ 80%', 100: 'DEMAND ≥ 100%' }[S.autosell] || '';
       const lvl = E.repLevel(), next = AT.REP_LEVELS[lvl + 1];
-      v.repline = `REPUTATION LEVEL ${lvl}${next ? ` · ${fmt(S.rep)}/${next}` : ' · MAX'} · ore prices +${Math.round((Math.pow(AT.REP_VALUE, lvl) - 1) * 100)}% · ${E.contractSlots(M)} slots`;
+      v.repline = `REP LEVEL ${lvl}${next ? ` · ${fmt(S.rep)}/${next}` : ' · MAX'} · ore prices +${Math.round((Math.pow(AT.REP_VALUE, lvl) - 1) * 100)}% · ${E.contractSlots(M)} slots`;
       v.repbar = { w: next ? (S.rep - AT.REP_LEVELS[lvl]) / (next - AT.REP_LEVELS[lvl]) * 100 : 100 };
       for (const c of S.contracts) {
         const have = c.type === 'deliver' ? S.ores[c.ore] : c.prog;
+        const rdy = E.contractReady(c);
         v['cp_' + c.id] = { w: Math.min(1, have / c.n) * 100 };
-        v['ct_' + c.id] = `${fmt(Math.min(have, c.n))}/${fmt(c.n)} · ${AT.fmtTime(c.expires - S.time)} left`;
-        v['cd_' + c.id] = { h: E.contractReady(c) ? 'DELIVER<small>collect reward</small>' : 'IN PROGRESS<small>—</small>', dis: !E.contractReady(c) };
+        v['ct_' + c.id] = `${fmt(Math.min(have, c.n))}/${fmt(c.n)} · ${AT.fmtTime(c.expires - S.time)}`;
+        v['cd_' + c.id] = { h: 'DELIVER', dis: !rdy, tip: 'txt:' + (rdy ? 'Collect the reward.' : 'Not enough yet. Keep mining.') };
       }
       return v;
     },
@@ -516,39 +560,68 @@
 
   // ----------------------------- OUTPOSTS -----------------------------
   PANELS.outposts = {
-    sig(S) { return S.targets.filter((t) => t.outpost).map((t) => t.id).join() + '|' + S.builds.map((b) => b.target).join(); },
+    pick(S) { const ops = S.targets.filter((t) => t.outpost); if (!ops.some((t) => t.id === selOut)) selOut = ops.length ? ops[0].id : null; return selOut; },
+    sig(S) { return this.pick(S) + '|' + S.targets.filter((t) => t.outpost).map((t) => t.id).join() + '|' + S.builds.map((b) => b.target).join() + '|' + S.region; },
     build(S, M) {
-      let h = `${conHead('Outposts', 'Permanent mining bases that ship ore on their own.', '<span class="tog" data-k="optotal"></span>')}
-        <p class="note">Permanent bases on surveyed targets. Build one from a target's card in Mission Control. Up to ${AT.OUTPOST.perRegion} per region; levels go to ${AT.OUTPOST.maxLevel}.</p><div class="list">`;
-      for (const b of S.builds) { const t = E.targetById(b.target); if (t) h += `<div class="slot oprow"><img class="tico" src="${SPR.bodyIcon(t)}" alt=""><div class="smain"><div class="sname">${esc(t.name)}</div><div class="ssub">UNDER CONSTRUCTION</div><div class="bar thin"><i data-k="ob_${t.id}"></i></div></div></div>`; }
+      const sel = this.pick(S);
       const ops = S.targets.filter((t) => t.outpost);
-      if (!ops.length && !S.builds.length) h += `<div class="slot teaser">NO OUTPOSTS YET. SURVEY A RICH TARGET, THEN BUILD FROM ITS MISSION CARD.</div>`;
-      for (const t of ops) {
-        h += `<div class="slot oprow" data-act="seltarget" data-arg="${t.id}"><img class="tico" src="${SPR.bodyIcon(t)}" alt=""><div class="smain"><div class="sname">${esc(t.name)} <span class="hull">${AT.OUTPOST.names[t.region]}</span> <span class="lvl" data-k="ol_${t.id}"></span></div>
-          <div class="ssub" data-k="os_${t.id}"></div><div class="bar thin"><i data-k="or_${t.id}"></i></div></div>
-          <div class="seg">${btn('upout', t.id, 'gold', 'ou_' + t.id, 'data-rep="1"')}${btn('upout10', t.id, '', 'oux_' + t.id)}</div></div>`;
+      const cap = AT.OUTPOST.perRegion;
+      const regions = [];
+      for (let r = 0; r < AT.REGIONS.length; r++) {
+        const n = ops.filter((t) => t.region === r).length, b = S.builds.filter((x) => { const t = E.targetById(x.target); return t && t.region === r; }).length;
+        if (r <= S.region || n + b > 0) regions.push({ r, n, b });
       }
-      return h + '</div>';
+      let h = conHead('Outposts', 'Permanent mining bases that ship ore on their own.', '<span class="cx-pay" data-k="optotal"></span>');
+      if (!ops.length && !S.builds.length) {
+        const why = M.rules.noOutposts ? 'Outposts are disabled in this challenge.' : 'No outposts yet. Survey a rich target in Missions, then build from its card. Up to ' + cap + ' per region.';
+        return h + `<p class="empty">${why}</p><div class="cx-acts"><button class="btn tiny" data-act="tab" data-arg="missions">OPEN MISSIONS</button></div>`;
+      }
+      h += `<div class="op-caps" data-tip="txt:Each region can host ${cap} outposts, including any under construction. Levels go to ${AT.OUTPOST.maxLevel}.">${regions.map((x) => `<span class="op-cap ${x.n + x.b >= cap ? 'full' : ''}"><span class="dim">${AT.REGIONS[x.r].short}</span> <b>${x.n + x.b}/${cap}</b></span>`).join('')}</div>`;
+      let list = '';
+      for (const b of S.builds) {
+        const t = E.targetById(b.target); if (!t) continue;
+        list += `<div class="row op-build" style="--cols:28px minmax(0,1fr) 90px"><img class="tico" src="${SPR.bodyIcon(t)}" alt=""><div class="cx-nm"><b>${esc(t.name)}</b><div class="dim">Under construction</div></div><div class="bar thin"><i data-k="ob_${t.id}"></i></div></div>`;
+      }
+      for (const t of ops) {
+        list += `<div class="row op-row ${t.id === sel ? 'sel' : ''}" style="--cols:28px minmax(0,1fr) 44px 86px" role="button" tabindex="0" data-act="selout" data-arg="${t.id}"><img class="tico" src="${SPR.bodyIcon(t)}" alt="">
+          <div class="cx-nm"><b>${esc(t.name)}</b><div class="dim">${AT.OUTPOST.names[t.region]} · ${AT.REGIONS[t.region].short}</div></div><span class="num lvl" data-k="ol_${t.id}"></span><span class="num" data-k="oo_${t.id}"></span></div>`;
+      }
+      const st = ops.find((t) => t.id === sel);
+      let det = '';
+      if (st) {
+        det = `<div class="cx-det"><div class="cx-top"><img class="tico lg" src="${SPR.bodyIcon(st)}" alt=""><div><h4>${esc(st.name)}</h4><p class="dim">${AT.OUTPOST.names[st.region]} · ${AT.REGIONS[st.region].name}</p></div></div>
+          <dl class="kv"><div><dt>Level</dt><dd><span class="lvl" data-k="dl"></span> <span class="dim">/ ${AT.OUTPOST.maxLevel}</span></dd></div><div><dt>Output</dt><dd data-k="dout"></dd></div><div><dt>Worth</dt><dd data-k="dval"></dd></div><div><dt>Next bonus</dt><dd data-k="dbonus"></dd></div></dl>
+          <div class="cx-lv"><span class="dim">RESERVE</span><div class="bar thin"><i data-k="dres"></i></div><span class="dim" data-k="dresn"></span></div>
+          <div class="cx-acts">${btn('upout', st.id, 'gold', 'dup', 'data-rep="1"')}${btn('upout10', st.id, '', 'dup10')}<button class="btn ghost tiny" data-act="seltarget" data-arg="${st.id}" data-tip="txt:Open this target in Missions.">TARGET</button></div></div>`;
+      }
+      return h + `<div class="md"><div class="md-list">${list}</div><div class="md-detail">${det}</div></div>`;
     },
     update(S, M) {
       const v = {};
       let tot = 0;
       for (const b of S.builds) v['ob_' + b.target] = { w: b.t / b.T * 100 };
       for (const t of S.targets.filter((x) => x.outpost)) {
+        const live = E.targetLeft(t, M) > 0;
         const r = E.outpostRate(t, M), val = r * E.compValue(t, M);
-        tot += E.targetLeft(t, M) > 0 ? val : 0;
-        const sz = t.size * (M.flags.deep ? 100 : 1);
-        v['ol_' + t.id] = 'LV ' + t.outpost.lvl;
-        v['os_' + t.id] = E.targetLeft(t, M) > 0 ? `${fmt(r)}t/s · ≈${money(val)}/s at today's prices · ${AT.REGIONS[t.region].short}` : 'RESERVE EXHAUSTED. Research Deep Core Drilling or let it go.';
-        v['or_' + t.id] = { w: E.targetLeft(t, M) / sz * 100 };
+        tot += live ? val : 0;
+        v['ol_' + t.id] = 'L' + t.outpost.lvl;
+        v['oo_' + t.id] = live ? `${fmt(r)}t/s` : 'DEPLETED';
+        if (t.id !== selOut) continue;
+        const sz = t.size * (M.flags.deep ? 100 : 1), left = E.targetLeft(t, M);
+        const lv = t.outpost.lvl, mx = lv >= AT.OUTPOST.maxLevel;
+        v.dl = String(lv);
+        v.dout = live ? `${fmt(r)}t/s` : 'Reserve exhausted';
+        v.dval = live ? `≈${money(val)}/s at today's prices` : 'Research Deep Core Drilling or let it go';
+        v.dbonus = mx ? 'Max level' : `x1.5 output at L${(Math.floor(lv / 25) + 1) * 25}`;
+        v.dres = { w: left / sz * 100 };
+        v.dresn = Math.round(left / sz * 100) + '% left';
         const c = E.outpostUpCost(t, M);
-        const mx = t.outpost.lvl >= AT.OUTPOST.maxLevel;
-        v['ou_' + t.id] = { h: mx ? 'MAX LEVEL<small>—</small>' : `+1 LEVEL<small>${money(c)}</small>`, dis: mx || S.money < c };
-        let c10 = 0, l = t.outpost.lvl;
+        v.dup = { h: mx ? 'MAX LEVEL' : `+1 LEVEL<small>${money(c)}</small>`, dis: mx || S.money < c, tip: 'txt:' + (mx ? 'Fully upgraded.' : S.money < c ? 'Not enough cash.' : 'Raise output by one level.') };
+        let c10 = 0, l = lv;
         for (let i = 0; i < 10 && l < AT.OUTPOST.maxLevel; i++, l++) c10 += AT.OUTPOST.cost[t.region] * AT.OUTPOST.lvlCost * Math.pow(AT.OUTPOST.lvlGrowth, l) * M.outpostCost;
-        v['oux_' + t.id] = { h: `+10<small>${money(c10)}</small>`, dis: mx || S.money < c10 };
+        v.dup10 = { h: `+10<small>${money(c10)}</small>`, dis: mx || S.money < c10, tip: 'txt:' + (mx ? 'Fully upgraded.' : S.money < c10 ? 'Not enough cash.' : 'Buy ten levels at once.') };
       }
-      v.optotal = `≈${money(tot)}/s FROM ${E.ownedOutposts()} OUTPOSTS`;
+      v.optotal = `≈${money(tot)}/s · ${E.ownedOutposts()} OUTPOSTS`;
       return v;
     },
   };
@@ -1155,6 +1228,8 @@
       case 'settings': openSettings(); break;
       case 'collapse': { const c = S.settings.collapsed = S.settings.collapsed || {}; c[arg] = !c[arg]; sig = null; break; }
       case 'seltarget': selectTarget(+arg); break;
+      case 'selpilot': selPilot = +arg; sig = null; break;
+      case 'selout': selOut = +arg; sig = null; break;
       case 'closeup': S.selTarget = +arg; AT.scene.setView('target'); break;
       case 'flight': S.selTarget = +arg; AT.scene.setView('target'); sig = null; break;
       case 'sort': S.settings.sort = arg; sig = null; break;
@@ -1176,7 +1251,7 @@
       case 'scrap': { const now = performance.now(); if (!(confirmUntil['scrap' + arg] > now)) { confirmUntil['scrap' + arg] = now + 3000; el.innerHTML = 'SURE?<small>click again</small>'; return; } ok = E.scrapShip(+arg); sig = null; break; }
       case 'autobuy': S.autobuy[arg] = !S.autobuy[arg]; break;
       case 'hirepilot': ok = !!E.hirePilot(+arg); AT.audio.play(ok ? 'buy' : 'deny'); break;
-      case 'firepilot': ok = E.firePilot(+arg); break;
+      case 'firepilot': { const now = performance.now(); if (!(confirmUntil['fp' + arg] > now)) { confirmUntil['fp' + arg] = now + 3000; el.innerHTML = 'SURE?<small>click again</small>'; return; } ok = E.firePilot(+arg); sig = null; break; }
       case 'refreshcand': ok = E.refreshCandidates(true); AT.audio.play(ok ? 'buy' : 'deny'); break;
       case 'hire': ok = E.hire(arg); AT.audio.play(ok ? 'buy' : 'deny'); break;
       case 'fire': ok = E.fire(arg); break;
