@@ -483,6 +483,105 @@
   ];
 
   // =====================================================================
+  // QUICK-START TUTORIAL (new games only). Steps advance on the player's own actions.
+  // tab: the console the player must be in; sel: the element to highlight once there.
+  // =====================================================================
+  AT.TUTORIAL = [
+    { id: 'welcome', kick: 'WELCOME, OPERATOR', text: 'AstroTech Mining Co. Ships dig rocks, you sell the ore, the Board takes the credit. Four clicks to your first paycheck.' },
+    { id: 'fleet', kick: 'STEP 1 · FLEET', tab: 'fleet', tabText: 'Open the FLEET console. That is where ships live.', sel: '[data-act="buyship"][data-arg="prospector"]', text: 'Buy a PROSPECTOR. One pilot, one drill, one bad idea. It is also the cheapest.', lost: 'That one did not come back. Buy another PROSPECTOR. Ships are consumables too.' },
+    { id: 'launch', kick: 'STEP 2 · MISSIONS', tab: 'missions', tabText: 'Open MISSION CONTROL. The first target is already picked.', sel: '#tabbody .tcard [data-act="launch"]', text: 'Press LAUNCH. The target is surveyed, so the risk is low. Low is not none.', lost: 'No cargo. It happens. Press LAUNCH again.' },
+    { id: 'flight', kick: 'STEP 3 · IN FLIGHT', sel: '.left', text: 'Out, drill, back. Watch the ship in the viewport; the FLIGHTS board has the countdown. Cargo lands in your hold.' },
+    { id: 'sell', kick: 'STEP 4 · MARKET', tab: 'market', tabText: 'Cargo is home. Open the MARKET console.', sel: '[data-act="sellall"]', text: 'Press SELL EVERYTHING. Big sales push the price down, so later you will want to be patient.' },
+    { id: 'done', kick: 'FIRST PAYCHECK', sel: '#directive', text: 'The Board posts orders here, one at a time. Follow the strip. New consoles unlock as you grow, each with a short briefing.' },
+  ];
+
+  // =====================================================================
+  // FEATURE BRIEFINGS. A short card the first time a feature becomes available.
+  // when: [kind, arg] polled by ui.js. post: true = not part of the demo.
+  // goto: console to open. Seen ids live in S.briefingsSeen; all are re-readable in Archive > Field Manual.
+  // =====================================================================
+  AT.BRIEFINGS = [
+    // ---- console unlocks
+    { id: 'b_crew', when: ['reveal', 'crew'], icon: 'crew', title: 'Crew Console', goto: 'crew',
+      lines: ['Each ship needs a pilot. Hire one under CANDIDATES.', 'Pilots level up and cut mission risk. Staff boost the whole company.', 'Everyone is paid per second. Everyone notices when you stop.'] },
+    { id: 'b_market', when: ['reveal', 'market'], icon: 'market', title: 'Market Console', goto: 'market',
+      lines: ["Sell ore here. Every sale pushes that ore's price down; it recovers over time.", 'DEMAND above 100% pays best. Sell 25% when it is low.', 'Flooding a market is legal. It is also expensive.'] },
+    { id: 'b_research', when: ['reveal', 'research'], icon: 'research', title: 'Research Console', goto: 'research',
+      lines: ['Scientists produce RP. Hire one in Crew, then spend RP on nodes.', 'Each node needs the one before it. They unlock ships, automation and bigger numbers.', 'Nobody reads the papers. Everyone reads the results.'] },
+    { id: 'b_projects', when: ['reveal', 'projects'], icon: 'projects', title: 'Projects Console', goto: 'projects',
+      lines: ['One-time company initiatives, paid in cash. New ones appear as you grow.', 'Early projects pay for themselves. A few have side effects.', 'The log entries are worth reading.'] },
+    { id: 'b_outposts', when: ['reveal', 'outposts'], icon: 'outpost', title: 'Outposts Online', goto: 'outposts',
+      lines: ['Build a permanent base on a surveyed target, from its card in Missions.', 'It ships ore every second with no pilot and no risk, until the reserve runs dry.', 'Upgrade levels for more tonnes per second. Rocks are not forever.'] },
+    { id: 'b_company', when: ['reveal', 'company'], icon: 'company', title: 'Company Console', goto: 'company',
+      lines: ['Valuation follows revenue, not cash. Equity is valuation times your stake.', 'Peak equity this run sets what an Expansion pays out.', 'Cash on hand is not valuation. Neither is honesty.'] },
+    { id: 'b_expansion', when: ['reveal', 'expansion'], icon: 'expansion', title: 'Expansion Console', goto: 'expansion',
+      lines: ['Expansion resets your run for permanent power. The payout depends on peak equity.', 'The button lights up once you have enough. Until then, grow.', 'Everything resets except what the Board decides to keep.'] },
+    // ---- mechanics
+    { id: 'b_pads', when: ['pads'], icon: 'pad', title: 'Launch Pads', goto: 'fleet',
+      lines: ['Each pad flies one ship at a time. Extra ships wait their turn.', 'Build pads in Fleet. Each costs four times the last.', 'Ships queue. Revenue does not.'] },
+    { id: 'b_contracts', when: ['contracts'], icon: 'contract', title: 'Client Contracts', goto: 'market',
+      lines: ['Clients post orders on the Market console: deliver ore for a bonus.', 'Hold back the ore a contract asks for, then sell the rest.', 'Delivering earns reputation. Declining costs 1.'] },
+    { id: 'b_rep', when: ['rep', 1], icon: 'star', title: 'Reputation', goto: 'market',
+      lines: ['Every level raises all ore prices by 5%. Deliver contracts to climb.', 'Reputation resets each run. Clients have short memories.'] },
+    { id: 'b_incident', when: ['incident'], icon: 'warn', title: 'Incidents',
+      lines: ['Decision cards appear over the viewport. Pick A or B.', 'Ignore one and it resolves itself in 150 seconds, with option B.', 'Most choices trade money for risk. Read the small print.'] },
+    { id: 'b_expedition', when: ['expedition'], icon: 'map', title: 'Expeditions', goto: 'missions',
+      lines: ['A starred target is waiting in Mission Control. It flies once.', 'Success opens a card: choose one of two permanent ARTIFACTS.', 'The hazard is high. Send your best ship, with a pilot.'] },
+    { id: 'b_artifact', when: ['artifact'], icon: 'gem', title: 'Artifacts', goto: 'archive',
+      lines: ['Artifacts are permanent bonuses. They survive every reset.', 'The collection lives in Archive. Some come from expeditions, some from luck.', 'Provenance is a formality.'] },
+    { id: 'b_memorial', when: ['memorial'], icon: 'skull', title: 'Memorial Wall', goto: 'archive',
+      lines: ['A pilot did not come home. Their name is on the wall in Archive.', 'Escape Pods research brings crews back. Hull Insurance only refunds the hull.', 'The wall is not a KPI. It is tracked like one.'] },
+    { id: 'b_staff', when: ['staff'], icon: 'crew', title: 'Staff', goto: 'crew',
+      lines: ['Scientists make research, Traders deepen markets, Engineers repair, Analysts find targets.', 'Each costs a rising salary, paid every second.', 'Keep cash above payroll. Staff have views on late pay.'] },
+    { id: 'b_strike', when: ['strike'], icon: 'warn', title: 'Crew on Strike', goto: 'crew',
+      lines: ['Payroll was missed. Staff bonuses and research are halted.', 'Get cash above payroll and work resumes. Sell ore now.', 'Left alone, unpaid staff start quitting.'] },
+    // ---- research / project unlocks
+    { id: 'b_flight', when: ['flag', 'flight'], icon: 'rocket', title: 'Flight Director', goto: 'fleet',
+      lines: ['REPEAT in Fleet relaunches a ship to its last target whenever it lands.', 'DISPATCH in Missions sends every idle ship to its best target.', 'Fewer clicks. Same crashes.'] },
+    { id: 'b_autorepair', when: ['flag', 'autorepair'], icon: 'pick', title: 'Field Repair Kits', goto: 'fleet',
+      lines: ['Ships that land below 70% hull now repair themselves.', 'Worn hulls fly with more risk, so this one matters.', 'RUSH in Fleet pays cash to skip the wait.'] },
+    { id: 'b_autopilot', when: ['flag', 'autopilot'], icon: 'screen', title: 'Autopilot',
+      lines: ['Ships with no pilot can now fly, at 60% more risk.', 'A pilot is safer. Autopilot is free.', 'It has never filed a complaint.'] },
+    { id: 'b_autosell', when: ['flag', 'autosell'], icon: 'money', title: 'Sales Daemon', goto: 'market',
+      lines: ['AUTO-SELL in Market sells ore on landing: ALWAYS, or only when DEMAND is high.', 'Set it once and forget it. It sells at whatever price it sees.'] },
+    { id: 'b_incorp', when: ['flag', 'incorp'], icon: 'company', title: 'Going Public', goto: 'company',
+      lines: ['Company now has shares, investor confidence and quarterly targets.', 'ISSUE SHARES for fast cash; it dilutes your stake. BUYBACK reverses that.', 'You now answer to people who have never seen a rocket.'] },
+    { id: 'b_quarter', when: ['quarter'], icon: 'clock', title: 'Quarterly Results', goto: 'company',
+      lines: ["Each quarter (90 seconds) must beat last quarter's earnings by 20%.", 'A beat raises confidence, which raises valuation. A miss cuts it hard.', 'Guidance Management research lowers the bar to 10%.'] },
+    { id: 'b_fleetai', when: ['flag', 'fleetai'], icon: 'lens', title: 'Fleet Coordination AI', goto: 'archive',
+      lines: ['Idle ships now pick their own targets, and surveys run themselves.', 'Set its risk limit under Archive > Settings.', 'It does not ask permission. That was the point.'] },
+    { id: 'b_autobuy', when: ['flag', 'autobuy'], icon: 'box', title: 'Procurement AI', goto: 'fleet', post: true,
+      lines: ['AUTO-BUY in Fleet buys pads, ships and upgrades whenever cash allows.', 'Switch each type on separately.', 'It spends without hesitation. Accounting approves.'] },
+    // ---- prestige layers
+    { id: 'b_kuiper_ready', when: ['layerReady', 0], icon: 'cc', title: 'Kuiper Jump Ready', goto: 'expansion', post: true,
+      lines: ['You can afford a Kuiper Jump. It resets your run for CRYO CORES.', 'Cores buy permanent upgrades in Expansion. Every Jump pays more than the last.', 'The button asks twice. The Board does not.'] },
+    { id: 'b_kuiper_done', when: ['layerRuns', 0, 1], icon: 'cc', title: 'First Kuiper Jump', goto: 'expansion', post: true,
+      lines: ['Spend Cryo Cores on upgrades in Expansion, then rebuild faster.', 'Kuiper targets now appear. Milestones unlock as your Jump count grows.', 'Cores, upgrades and milestones stay. The rest of the run does not.'] },
+    { id: 'b_oort_ready', when: ['layerReady', 1], icon: 'cs', title: 'Oort Exodus Ready', goto: 'expansion', post: true,
+      lines: ['An Exodus is a second reset, one layer up. It pays COMET SHARDS.', 'Shards boost Cryo Core gains and unlock Jump automation.', 'The requirement is enormous. So is the payout.'] },
+    { id: 'b_oort_done', when: ['layerRuns', 1, 1], icon: 'cs', title: 'First Oort Exodus', goto: 'expansion', post: true,
+      lines: ['Oort targets now appear. Comet Shard upgrades are in Expansion.', 'Archive Vaults keeps your Cryo Core upgrades through each Exodus.', 'Nothing here is left behind on purpose.'] },
+    { id: 'b_stars_ready', when: ['layerReady', 2], icon: 'ss', title: 'Stellar Ignition Ready', goto: 'expansion', post: true,
+      lines: ['Ignition burns the solar system for STAR SEEDS.', 'Seeds multiply Comet Shard gains and unlock Exodus automation.', 'One push. Then the stars.'] },
+    { id: 'b_stars_done', when: ['layerRuns', 2, 1], icon: 'ss', title: 'First Stellar Ignition', goto: 'expansion', post: true,
+      lines: ['Stars are now valid targets. Star Seed upgrades are in Expansion.', 'Eternal Archives keeps research and Comet Shard upgrades.', 'The sun is a resource. The Board has been told.'] },
+    { id: 'b_galaxy_ready', when: ['layerReady', 3], icon: 'dm', title: 'Galactic Ascent Ready', goto: 'expansion', post: true,
+      lines: ['Ascent leaves the galaxy and pays DARK MATTER.', 'Dark Matter boosts Star Seed gains and unlocks Ignition automation.', 'One galaxy was the start-up phase.'] },
+    { id: 'b_galaxy_done', when: ['layerRuns', 3, 1], icon: 'dm', title: 'First Galactic Ascent', goto: 'expansion', post: true,
+      lines: ['Other galaxies are now targets. Dark Matter upgrades are in Expansion.', 'Void challenges unlock after your second Ascent.', 'There is a ledger out here too. Somebody keeps it.'] },
+    { id: 'b_challenges', when: ['flagAny', 'challenges'], icon: 'lock', title: 'Challenges', goto: 'expansion', post: true,
+      lines: ["Reach a layer's equity target under a restriction. Each pays a permanent reward.", 'Start one in Expansion. It resets the run, and you can abandon at any time.', 'Failure is free. Success is forever.'] },
+    { id: 'b_challenge_done', when: ['challengeDone'], icon: 'trophy', title: 'Challenge Complete', goto: 'expansion', post: true,
+      lines: ['The reward is permanent, even through resets.', 'The restriction ends with the challenge. The others are still waiting.'] },
+    { id: 'b_daemon', when: ['flagAny', 'autoLayer'], icon: 'reactor', title: 'Daemons', goto: 'expansion', post: true,
+      lines: ['A daemon performs a lower reset for you at a good moment.', 'Pick a mode in Expansion: SMART, or only when the gain is x1, x2 or x5 the last one.', 'You built a machine to do your job. Well done.'] },
+    { id: 'b_ending', when: ['canEnd'], icon: 'book', title: 'The Last Transaction', goto: 'expansion', post: true,
+      lines: ['You can close the ledger in Expansion. That ends this universe.', 'After, start Universe 2: everything x3, artifacts and achievements kept.', 'Or keep playing. The numbers will not mind.'] },
+    { id: 'b_ngplus', when: ['ngPlus'], icon: 'disc', title: 'New Universe', goto: 'missions', post: true,
+      lines: ['Everything now sells for 3x per universe. Artifacts and achievements carried over.', 'The run starts over from one pilot and one bad idea.'] },
+  ];
+
+  // =====================================================================
   // PRESTIGE LAYERS
   // gain = floor((peakEquity / req) ^ exp * mults)
   // milestones: unlocked by number of resets of that layer

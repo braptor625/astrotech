@@ -355,3 +355,58 @@ html.hc .btn.ghost { color: var(--ink); }
 html.hc #tooltip { background: #000; box-shadow: inset 0 0 0 var(--px) #fff; }
 html.hc .bar { box-shadow: 0 0 0 2px #fff; }
 html.hc .scene-wrap { box-shadow: 0 0 0 3px #fff; }
+
+/* ---------- quick-start tutorial (coach marks). The dim layer never takes clicks, so nothing the tutorial asks for is blocked. ---------- */
+#tut { position: fixed; inset: 0; z-index: 66; pointer-events: none; }
+.tut-dim { position: absolute; inset: 0; background: rgba(3, 5, 15, 0.78); }
+.tut-frame { position: absolute; border: 3px solid var(--gold); background: transparent;
+  box-shadow: 0 0 0 3px var(--edge), inset 0 0 0 3px var(--edge), 0 0 0 100vmax rgba(3, 5, 15, 0.78); animation: tutpulse 0.9s steps(2) infinite; }
+/* pixel corner brackets */
+.tut-frame::before, .tut-frame::after { content: ''; position: absolute; width: 14px; height: 14px; border: 0 solid #fff2b0; }
+.tut-frame::before { left: -9px; top: -9px; border-width: 4px 0 0 4px; }
+.tut-frame::after { right: -9px; bottom: -9px; border-width: 0 4px 4px 0; }
+@keyframes tutpulse { 50% { border-color: #fff2b0; } }
+.tut-panel { position: absolute; left: 0; top: 0; width: min(360px, calc(100vw - 20px)); padding: 12px 14px 14px; display: grid; gap: 9px; pointer-events: auto; animation: cardin 0.25s steps(3);
+  box-shadow: inset 0 0 0 var(--px) var(--edge), inset 0 0 0 calc(var(--px) * 2) var(--gold); }
+.tut-kick { font-family: var(--f-display); font-size: var(--fs-xs); color: var(--gold); letter-spacing: 0.06em; }
+.tut-dots { display: inline-flex; gap: 4px; }
+.tut-dots i { width: 8px; height: 8px; background: var(--slot-lo); box-shadow: 0 0 0 2px var(--edge); }
+.tut-dots i.on { background: var(--good); } .tut-dots i.cur { background: var(--gold); }
+.tut-text { margin: 0; font-size: var(--fb-m); line-height: 1.12; color: var(--ink); }
+.tut-btns { gap: 6px; }
+.tut-btns .btn { flex: 0 1 auto; }
+
+/* ---------- feature briefing card: bottom-right, clear of toasts (bottom-left) and decision cards (over the viewport) ---------- */
+#briefing { position: fixed; right: 16px; bottom: 16px; width: min(400px, calc(100vw - 32px)); z-index: 58; padding: 11px 14px 13px; display: grid; gap: 7px; animation: briefin 0.3s steps(3);
+  box-shadow: inset 0 0 0 var(--px) var(--edge), inset 0 0 0 calc(var(--px) * 2) var(--ice); }
+@keyframes briefin { from { transform: translateX(120%); } }
+.brief-kick { font-family: var(--f-display); font-size: var(--fs-xs); color: var(--ice); letter-spacing: 0.08em; }
+.brief-more { font-family: var(--f-display); font-size: var(--fs-xs); color: var(--faint); }
+.brief-head { display: flex; align-items: center; gap: 10px; }
+.brief-head h3 { font-size: var(--fs-m); color: var(--gold); }
+.brief-body { display: grid; gap: 4px; }
+.brief-body p { margin: 0; font-size: var(--fb-s); line-height: 1.1; color: var(--dim); padding-left: 14px; position: relative; }
+.brief-body p::before { content: ''; position: absolute; left: 1px; top: 0.4em; width: 6px; height: 6px; background: var(--ice); }
+.brief-body p.lead { color: var(--ink); font-size: var(--fb-m); }
+.brief-btns { gap: 6px; margin-top: 2px; }
+.brief-btns .btn { flex: 0 1 auto; }
+
+/* Field Manual (Archive) */
+.manual { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 5px; }
+.man { display: block; padding: 6px 9px; }
+.man.open { grid-column: 1 / -1; background: var(--slot-lo); padding-bottom: 10px; }
+.manual.dim { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); margin-top: 5px; }
+.man.locked { display: flex; align-items: center; gap: 6px; opacity: 0.45; padding: 4px 8px; }
+.man.locked .ico { width: 14px; height: 14px; }
+.man.locked b { font-family: var(--f-display); font-size: var(--fs-xs); font-weight: 400; color: var(--faint); }
+.man-h { display: flex; align-items: center; gap: 8px; }
+.man-h b { font-family: var(--f-display); font-size: var(--fs-xs); font-weight: 400; flex: 1; min-width: 0; }
+.man-x { font-family: var(--f-display); color: var(--gold); }
+.man:not(.locked):hover { filter: brightness(1.12); }
+.man-b { margin-top: 6px; display: grid; gap: 3px; }
+.man-b p { margin: 0; font-size: var(--fb-s); color: var(--dim); }
+.man-b p:first-child { color: var(--ink); }
+
+@media (max-width: 980px) {
+  #briefing { right: 8px; left: 8px; bottom: 8px; width: auto; }
+}

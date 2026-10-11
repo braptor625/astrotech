@@ -19,6 +19,7 @@ STUCK_SEC = 300      # same directive for this long -> report
 STEP = 15            # seconds of fast-forward per loop
 
 timeline, issues, errors = [], [], []
+tut_log, brief_log = [], []
 top_risky = [0]   # how often the top Mission Control row showed >=35% risk
 seen_issue = set()
 shots = 0
@@ -80,13 +81,27 @@ with sync_playwright() as p:
         loc = pg.locator(sel)
         return [loc.nth(i) for i in range(loc.count()) if loc.nth(i).is_visible()]
 
+    def dismiss_guides():
+        """A new player reads the welcome card and presses GOT IT on briefings (they sit bottom-right over the console).
+        The tutorial itself advances on the bot's own actions (and never blocks clicks)."""
+        for _ in range(3):
+            if pg.locator('.tut-panel [data-act=tut-next]').count() and pg.locator('.tut-panel [data-act=tut-next]').first.is_visible():
+                kind = pg.inner_text('.tut-kick') if pg.locator('.tut-kick').count() else 'tutorial'
+                pg.click('.tut-panel [data-act=tut-next]'); pg.wait_for_timeout(120); log('TUTORIAL ' + kind + ': pressed the button'); tut_log.append(kind)
+            elif pg.locator('#briefing [data-act=brief-ok]').count() and pg.locator('#briefing [data-act=brief-ok]').first.is_visible():
+                title = pg.inner_text('#briefing h3')
+                pg.click('#briefing [data-act=brief-ok]'); pg.wait_for_timeout(120); log('BRIEFING dismissed: ' + title); brief_log.append(title)
+            else: break
+
     def open_tab(t):
+        dismiss_guides()
         sel = f'[data-act=tab][data-arg={t}]'
         if not pg.locator(sel).count() or not pg.locator(sel).first.is_visible(): return False
         pg.click(sel); pg.wait_for_timeout(120); return True
 
     def click_enabled(sel, desc):
         """Click first visible enabled match. Returns True/False."""
+        dismiss_guides()
         for el in vis(sel):
             if el.is_enabled():
                 el.click(); pg.wait_for_timeout(120); log('click ' + desc); return True
@@ -275,6 +290,7 @@ with sync_playwright() as p:
     shot_dirs = {1, 2, 3, 4, 5, 6, 8, 10, 14, 20, 25, 30}
     idle_waits = 0
     while gt() < MAX_MIN * 60 and dir_no() <= MAX_DIR:
+        dismiss_guides()
         handle_cards()
         d = dir_no()
         text = re.sub(r'^DIRECTIVE \d+/\d+:\s*', '', dir_txt())
@@ -309,10 +325,12 @@ with sync_playwright() as p:
         pg.wait_for_timeout(250)
 
     snap('99_end')
+    tut_state = pg.evaluate('AT.E.S.tutorial')
     final = pg.evaluate("({t:AT.E.S.time, dir:AT.E.S.dirIdx, money:AT.E.S.money, losses:AT.E.S.stats.losses, deaths:AT.E.S.stats.deaths, missions:AT.E.S.stats.missions, ships:AT.E.S.ships.length, pilots:AT.E.S.pilots.length})")
     b.close()
 
-summary = f'(top row showed >=35% risk on {top_risky[0]} picks)\nFINAL: game time {fmt_t(final["t"])}, directives done {final["dir"]}, missions {final["missions"]}, losses {final["losses"]}, pilot deaths {final["deaths"]}, ships {final["ships"]}, pilots {final["pilots"]}'
+if tut_state != 'done': issues.append(f'tutorial did not finish on its own (state {tut_state})')
+summary = f'tutorial: {tut_state}; briefings dismissed: {len(brief_log)} ({", ".join(brief_log)})\n(top row showed >=35% risk on {top_risky[0]} picks)\nFINAL: game time {fmt_t(final["t"])}, directives done {final["dir"]}, missions {final["missions"]}, losses {final["losses"]}, pilot deaths {final["deaths"]}, ships {final["ships"]}, pilots {final["pilots"]}'
 (out / 'timeline.txt').write_text('\n'.join(timeline) + '\n\n' + summary + '\n')
 (out / 'issues.txt').write_text('\n'.join(issues) + '\n')
 print('\n=== ISSUES ===\n' + '\n'.join(issues))

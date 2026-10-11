@@ -13,7 +13,9 @@ Oort Cloud → the stars → other galaxies. Fully mouse-playable.
 | `src/engine.js` | Pure game logic (no DOM). Runs in the browser and in Node |
 | `src/sprites.js` | Pixel art: icons, procedural rockets and pilot portraits |
 | `src/render.js` | Pixel renderer: rotating lit planets/asteroids, stars, galaxies, bitmap font |
+| `src/fx.js` | Pooled pixel particle engine (`AT.FX`): exhaust, smoke, explosions, sparks, ambient effects; density follows the Graphics setting |
 | `src/scene.js` | The viewport: system map, launch complex, close-up |
+| `src/guide.js` | Start-of-game tutorial (coach marks) and feature briefings / Field Manual |
 | `src/ui.js` | Consoles, tooltips, saving, offline progress, main loop |
 | `src/audio.js` | Chiptune sound effects synthesized with WebAudio |
 | `src/style.css`, `src/index.html` | Retro UI chrome and page shell |

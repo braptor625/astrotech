@@ -14,7 +14,7 @@ const read = (p) => readFileSync(src(p), 'utf8');
 let css = read('style.css');
 css = css.replace(/url\('fonts\/([^']+)'\)/g, (_, f) => `url(data:font/woff2;base64,${readFileSync(src('fonts/' + f)).toString('base64')})`);
 
-const scripts = (DEMO ? '/* ---- demo flag ---- */\nwindow.AT = window.AT || {}; window.AT.DEMO = true;\n' : '') + ['data.js', 'engine.js', 'sprites.js', 'render.js', 'audio.js', 'fx.js', 'scene.js', 'ui.js']
+const scripts = (DEMO ? '/* ---- demo flag ---- */\nwindow.AT = window.AT || {}; window.AT.DEMO = true;\n' : '') + ['data.js', 'engine.js', 'sprites.js', 'render.js', 'audio.js', 'fx.js', 'scene.js', 'guide.js', 'ui.js']
   .map((f) => `/* ---- ${f} ---- */\n` + read(f))
   .join('\n');
 if (/<\/script/i.test(scripts)) throw new Error('script contains </script');
