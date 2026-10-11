@@ -4,6 +4,7 @@
   const SC = AT.scene = {};
   const R = AT.R, SPR = AT.SPR;
   let cv, g, W = 384, H = 216, scale = 2;
+  let MU = 216, KY = 0.62, KY2 = 0.85, AF = 0; // MU: layout unit (height of a 16:9 canvas this wide); KY/KY2: map ellipse flattening; AF: 0 at 16:9 .. 1 at 4:5
   let view = 'map', mapRegion = 0, t = 0;
   let hover = null, mouse = null;
   const FX = AT.FX;
@@ -11,6 +12,7 @@
   const arrSeen = {};
   let launches = [], landings = [], booms = [];
   let padOf = {};
+  let skyCache = null;
   const cb = {};
   SC.cb = cb;
 
@@ -25,20 +27,38 @@
     cv.addEventListener('pointerleave', () => { mouse = null; hover = null; cv.style.cursor = ''; });
     cv.addEventListener('pointerdown', onDown);
     window.addEventListener('resize', () => SC.resize());
+    if (window.ResizeObserver) new ResizeObserver(() => SC.resize()).observe(cv.parentElement);
   };
+  // === monitor sizing ===
+  // The canvas fills whatever height the monitor column leaves (between 16:9 and 4:5). The integer pixel scale keeps the internal width near
+  // 320+ px where the column allows it (3x from 960 css px, 2x from 620, else 1x); the height follows the wrapper, clamped by its min/max-height.
+  const ASPECT_MIN = 9 / 16, ASPECT_MAX = 1.25;
   SC.resize = function () {
     if (!cv) return;
-    const cssW = cv.parentElement.clientWidth || 768;
-    scale = cssW >= 680 ? 3 : cssW >= 360 ? 2 : 1; // the monitor column is ~700px at 1920 and ~500px at 1366
-    W = Math.max(200, Math.round(cssW / scale));
-    H = Math.round(W * 9 / 16);
+    const wrap = cv.parentElement;
+    const cssW = wrap.clientWidth || 768;
+    const narrow = window.matchMedia && window.matchMedia('(max-width: 899px)').matches; // stacked layout: plain 16:9, the page scrolls
+    const hMin = Math.round(cssW * ASPECT_MIN), hMax = Math.round(cssW * ASPECT_MAX);
+    wrap.style.minHeight = narrow ? '' : hMin + 'px';
+    wrap.style.maxHeight = narrow ? '' : hMax + 'px';
+    const cssH = Math.max(hMin, Math.min(hMax, wrap.clientHeight || hMin));
+    const sc = cssW >= 960 ? 3 : cssW >= 620 ? 2 : 1;
+    const nW = Math.max(200, Math.round(cssW / sc));
+    const nH = Math.max(Math.round(nW * ASPECT_MIN), Math.min(Math.round(nW * ASPECT_MAX), Math.round(cssH / sc)));
+    if (nW === W && nH === H && sc === scale && cv.width === W && cv.height === H) return;
+    scale = sc; W = nW; H = nH;
+    MU = Math.min(H, Math.round(W * ASPECT_MIN));
+    AF = Math.max(0, Math.min(1, (H / (W * ASPECT_MIN) - 1) / (ASPECT_MAX / ASPECT_MIN - 1)));
+    KY = 0.62 + 0.68 * AF; KY2 = 0.85 + 0.55 * AF; // map ellipses open up towards circles as the canvas gets taller
     cv.width = W; cv.height = H;
     g.imageSmoothingEnabled = false;
+    const horizon = H - Math.round(MU * 0.3);
     const rand = SPR.rng(7);
     stars = [];
-    for (let i = 0; i < Math.floor(W * H / 300); i++) stars.push({ x: rand() * W, y: rand() * H, z: 1 + Math.floor(rand() * 3), tw: rand() * 6 });
+    for (let i = 0; i < Math.floor(W * H / 220); i++) stars.push({ x: rand() * W, y: rand() * H, z: 1 + Math.floor(rand() * 3), tw: rand() * 6 });
     clouds = [];
-    for (let i = 0; i < 7; i++) clouds.push({ x: rand() * W, y: H * (0.08 + rand() * 0.35), w: 18 + rand() * 40, v: 1 + rand() * 3 });
+    const nCl = Math.max(7, Math.min(16, Math.round(horizon / 20)));
+    for (let i = 0; i < nCl; i++) clouds.push({ x: rand() * W, y: horizon * (0.08 + rand() * 0.62), w: 18 + rand() * 40, v: 1 + rand() * 3 });
     hills = [];
     for (let x = 0; x <= W; x++) hills.push(R.fbm3(x / 40, 0, 0, 5, 4));
     FX.resize(W, H);
@@ -135,24 +155,24 @@
   // SYSTEM MAP
   // =====================================================================
   const MAP_BG = [['#070918', '#0d1230'], ['#05081a', '#0b1630'], ['#04050f', '#0a0c1f'], ['#0b0414', '#170a24'], ['#020204', '#0a0614']];
-  function mapCenter() { return { x: W * 0.5, y: H * 0.54 }; }
+  function mapCenter() { return { x: W * 0.5, y: H * 0.53 }; }
   function earthPos() {
-    const c = mapCenter(), rE = H * 0.22, a = t * 0.02 + 2.2;
-    return { x: c.x + Math.cos(a) * rE * 1.6, y: c.y + Math.sin(a) * rE * 0.62 };
+    const c = mapCenter(), rE = MU * 0.22, a = t * 0.02 + 2.2;
+    return { x: c.x + Math.cos(a) * rE * 1.6, y: c.y + Math.sin(a) * rE * KY };
   }
   function regionRange(r, d) {
     // map distance to a radius in pixels for each map scale
-    if (r === 0) return H * 0.18 + clamp01((d - 6) / 36) * H * 0.34;
-    if (r === 1) return H * 0.34 + clamp01((d - 120) / 190) * H * 0.18;
-    if (r === 2) return H * 0.2 + clamp01((d - 2500) / 6800) * H * 0.3;
-    if (r === 3) return H * 0.12 + clamp01((d - 9e4) / 3.2e5) * H * 0.38;
-    return H * 0.18 + clamp01((d - 2e7) / 1.25e8) * H * 0.32;
+    if (r === 0) return MU * 0.18 + clamp01((d - 6) / 36) * MU * 0.34;
+    if (r === 1) return MU * 0.34 + clamp01((d - 120) / 190) * MU * 0.18;
+    if (r === 2) return MU * 0.2 + clamp01((d - 2500) / 6800) * MU * 0.3;
+    if (r === 3) return MU * 0.12 + clamp01((d - 9e4) / 3.2e5) * MU * 0.38;
+    return MU * 0.18 + clamp01((d - 2e7) / 1.25e8) * MU * 0.32;
   }
   function clamp01(x) { return Math.max(0, Math.min(1, x)); }
   SC.targetPos = function (tg) {
     const c = mapCenter();
     const rr = regionRange(tg.region, tg.dist);
-    const sq = tg.region >= 2 ? 0.85 : 0.62;
+    const sq = tg.region >= 2 ? KY2 : KY;
     const a = tg.ang + (tg.region === 0 ? t * 0.004 : 0);
     return { x: c.x + Math.cos(a) * rr * 1.6, y: c.y + Math.sin(a) * rr * sq };
   };
@@ -162,7 +182,7 @@
   }
   function pickTarget(p) {
     const S = AT.E.S;
-    let best = null, bd = 9;
+    let best = null, bd = Math.max(9, 18 / scale);
     for (const tg of S.targets) {
       if (tg.region !== mapRegion) continue;
       const q = SC.targetPos(tg);
@@ -180,55 +200,55 @@
     if (r === 0) {
       // orbits: Mercury, Venus, Earth, Mars, Jupiter
       const orb = [[0.07, '#2a3366'], [0.13, '#2a3366'], [0.22, '#3d4f9a'], [0.3, '#4a2a3a'], [0.62, '#3a3050']];
-      for (const [k, col] of orb) R.ellipse(g, c.x, c.y, H * k * 1.6, H * k * 0.62, col, 2);
+      for (const [k, col] of orb) R.ellipse(g, c.x, c.y, MU * k * 1.6, MU * k * KY, col, 2);
       // main belt
       const rand = SPR.rng(3);
       for (let i = 0; i < 520; i++) {
-        const a = rand() * Math.PI * 2 + t * 0.003, rr = H * (0.4 + rand() * 0.11);
+        const a = rand() * Math.PI * 2 + t * 0.003, rr = MU * (0.4 + rand() * 0.11);
         g.fillStyle = rand() < 0.3 ? '#5a5070' : '#3a3550';
-        g.fillRect(Math.round(c.x + Math.cos(a) * rr * 1.6), Math.round(c.y + Math.sin(a) * rr * 0.62), 1, 1);
+        g.fillRect(Math.round(c.x + Math.cos(a) * rr * 1.6), Math.round(c.y + Math.sin(a) * rr * KY), 1, 1);
       }
       R.drawStar(g, c.x, c.y, 6, '#ffd866', t, { corona: 0.6 });
       const e = earthPos();
       R.drawBody(g, e.x, e.y, 3.5, null, { kind: 'earth', tex: R.earthTexture(), rot: t * 0.5, cloudRot: t * 0.2, light: [c.x - e.x, c.y - e.y, 2] });
       R.text(g, 'EARTH', e.x - R.textWidth('EARTH') / 2, e.y + 6, '#86c3ee', '#000');
-      const ma = t * 0.012 + 4, mr = H * 0.3;
-      R.disc(g, c.x + Math.cos(ma) * mr * 1.6, c.y + Math.sin(ma) * mr * 0.62, 2, '#c4471c');
-      const ja = t * 0.004 + 1, jr = H * 0.62;
-      const jx = c.x + Math.cos(ja) * jr * 1.6, jy = c.y + Math.sin(ja) * jr * 0.62;
+      const ma = t * 0.012 + 4, mr = MU * 0.3;
+      R.disc(g, c.x + Math.cos(ma) * mr * 1.6, c.y + Math.sin(ma) * mr * KY, 2, '#c4471c');
+      const ja = t * 0.004 + 1, jr = MU * 0.62;
+      const jx = c.x + Math.cos(ja) * jr * 1.6, jy = c.y + Math.sin(ja) * jr * KY;
       if (jx > -10 && jx < W + 10 && jy > -10 && jy < H + 10) R.drawBody(g, jx, jy, 6, ['#3a2a1a', '#9a6a3a', '#d9b07a', '#f0d8b0'], { kind: 'band', tex: R.bandTexture(4), rot: t * 0.3, light: [c.x - jx, c.y - jy, 2], ring: { inner: 1.45, outer: 2.2, elev: 0.3, ang: -0.3, cols: ['#4a3a2a', '#9a8260', '#d8c49a'] } });
     } else if (r === 1) {
       const pl = [[0.08, '#d9b07a'], [0.14, '#e8d090'], [0.21, '#86c3ee'], [0.27, '#4f6ad6']];
-      for (const [k] of pl) R.ellipse(g, c.x, c.y, H * k * 1.6, H * k * 0.62, '#26305a', 2);
+      for (const [k] of pl) R.ellipse(g, c.x, c.y, MU * k * 1.6, MU * k * KY, '#26305a', 2);
       pl.forEach(([k, col], i) => {
         const a = t * (0.01 / (i + 1)) + i * 1.7;
-        R.disc(g, c.x + Math.cos(a) * H * k * 1.6, c.y + Math.sin(a) * H * k * 0.62, i < 2 ? 2 : 1, col);
+        R.disc(g, c.x + Math.cos(a) * MU * k * 1.6, c.y + Math.sin(a) * MU * k * KY, i < 2 ? 2 : 1, col);
       });
       const rand = SPR.rng(5);
       for (let i = 0; i < 700; i++) {
-        const a = rand() * Math.PI * 2 + t * 0.001, rr = H * (0.33 + rand() * 0.2);
+        const a = rand() * Math.PI * 2 + t * 0.001, rr = MU * (0.33 + rand() * 0.2);
         g.fillStyle = rand() < 0.3 ? '#4a5a8a' : '#2a3460';
-        g.fillRect(Math.round(c.x + Math.cos(a) * rr * 1.6), Math.round(c.y + Math.sin(a) * rr * 0.62), 1, 1);
+        g.fillRect(Math.round(c.x + Math.cos(a) * rr * 1.6), Math.round(c.y + Math.sin(a) * rr * KY), 1, 1);
       }
       R.drawStar(g, c.x, c.y, 2, '#fff2b0', t, { corona: 0.8 });
-      R.text(g, 'NEPTUNE', c.x + H * 0.27 * 1.6 - R.textWidth('NEPTUNE') / 2, c.y + 6, '#4f6ad6', '#000');
+      R.text(g, 'NEPTUNE', c.x + MU * 0.27 * 1.6 - R.textWidth('NEPTUNE') / 2, c.y + 6, '#4f6ad6', '#000');
     } else if (r === 2) {
       const rand = SPR.rng(9);
       for (let i = 0; i < 1100; i++) {
-        const a = rand() * Math.PI * 2, rr = H * (0.16 + Math.pow(rand(), 0.6) * 0.36);
+        const a = rand() * Math.PI * 2, rr = MU * (0.16 + Math.pow(rand(), 0.6) * 0.36);
         g.fillStyle = rand() < 0.2 ? '#3a4a5a' : '#1c2434';
-        g.fillRect(Math.round(c.x + Math.cos(a) * rr * 1.6), Math.round(c.y + Math.sin(a) * rr * 0.85), 1, 1);
+        g.fillRect(Math.round(c.x + Math.cos(a) * rr * 1.6), Math.round(c.y + Math.sin(a) * rr * KY2), 1, 1);
       }
-      R.ellipse(g, c.x, c.y, H * 0.06 * 1.6, H * 0.06 * 0.62, '#2a3460', 2);
+      R.ellipse(g, c.x, c.y, MU * 0.06 * 1.6, MU * 0.06 * KY, '#2a3460', 2);
       g.fillStyle = '#fffbe6'; g.fillRect(Math.round(c.x), Math.round(c.y), 1, 1);
       R.text(g, 'SOL', c.x - R.textWidth('SOL') / 2, c.y + 4, '#8b97c9', '#000');
     } else if (r === 3) {
       R.drawStar(g, c.x, c.y, 2.5, '#ffd866', t, { corona: 0.6 });
       R.text(g, 'SOL', c.x - R.textWidth('SOL') / 2, c.y + 6, '#ffd866', '#000');
-      for (let k = 1; k <= 3; k++) R.ellipse(g, c.x, c.y, H * 0.15 * k * 1.6, H * 0.15 * k * 0.85, '#2a1a3a', 3);
+      for (let k = 1; k <= 3; k++) R.ellipse(g, c.x, c.y, MU * 0.15 * k * 1.6, MU * 0.15 * k * KY2, '#2a1a3a', 3);
     } else {
-      R.drawGalaxy(g, c.x, c.y, H * 0.13, '#a898ff', t, 77, 'galaxy', 0.5);
-      R.text(g, 'MILKY WAY', c.x - R.textWidth('MILKY WAY') / 2, c.y + H * 0.08, '#a898ff', '#000');
+      R.drawGalaxy(g, c.x, c.y, MU * 0.13, '#a898ff', t, 77, 'galaxy', 0.5);
+      R.text(g, 'MILKY WAY', c.x - R.textWidth('MILKY WAY') / 2, c.y + MU * 0.08, '#a898ff', '#000');
     }
     // targets
     let comets = 0;
@@ -366,17 +386,26 @@
   function drawLaunch(S, dt) {
     const phase = (S.stats.totalTime / 300 + 0.4) % 1;
     const sky = skyColors(phase, S);
-    const horizon = Math.round(H * 0.7);
-    // sky bands with dithering
-    const bands = 10;
-    for (let i = 0; i < bands; i++) {
-      const y0 = Math.floor(horizon * i / bands), y1 = Math.floor(horizon * (i + 1) / bands);
-      const c = R.mix(sky.top, sky.bot, i / (bands - 1));
-      const c2 = R.mix(sky.top, sky.bot, Math.min(1, (i + 1) / (bands - 1)));
-      g.fillStyle = R.hex(c); g.fillRect(0, y0, W, y1 - y0);
-      g.fillStyle = R.hex(c2);
-      for (let y = y0; y < y1; y++) for (let x = (y & 1); x < W; x += 2) if (((y - y0) / (y1 - y0)) > 0.6 && ((x + y) % 4 === 0)) g.fillRect(x, y, 1, 1);
+    const horizon = H - Math.round(MU * 0.3);
+    // sky bands with dithering (taller sky gets more bands)
+    const bands = Math.max(10, Math.round(horizon / 15));
+    // the banded, dithered sky is cached on an offscreen canvas and only redrawn when its colours change (it is per-pixel work on a big canvas)
+    const bandCols = [];
+    for (let i = 0; i < bands; i++) bandCols.push(R.hex(R.mix(sky.top, sky.bot, i / (bands - 1))));
+    const skyKey = W + 'x' + horizon + bandCols.join();
+    if (!skyCache || skyCache.key !== skyKey) {
+      if (!skyCache) skyCache = { c: document.createElement('canvas') };
+      skyCache.key = skyKey; skyCache.c.width = W; skyCache.c.height = horizon;
+      const sg = skyCache.c.getContext('2d');
+      for (let i = 0; i < bands; i++) {
+        const y0 = Math.floor(horizon * i / bands), y1 = Math.floor(horizon * (i + 1) / bands);
+        const c2 = R.hex(R.mix(sky.top, sky.bot, Math.min(1, (i + 1) / (bands - 1))));
+        sg.fillStyle = bandCols[i]; sg.fillRect(0, y0, W, y1 - y0);
+        sg.fillStyle = c2;
+        for (let y = y0; y < y1; y++) for (let x = (y & 1); x < W; x += 2) if (((y - y0) / (y1 - y0)) > 0.6 && ((x + y) % 4 === 0)) sg.fillRect(x, y, 1, 1);
+      }
     }
+    g.drawImage(skyCache.c, 0, 0);
     // stars at night
     FX.setAmbient(sky.dark, horizon);
     if (sky.dark > 0.3 && !S.projects.p_milkyway) FX.skyStars(g, stars, horizon, sky.dark, t);
@@ -392,7 +421,7 @@
     // orbital megastructure in later regions
     if (S.region >= 2) {
       g.fillStyle = sky.dark > 0.5 ? '#3a4a7a' : '#c8d0e8';
-      for (let x = 0; x < W; x++) { const y = Math.round(H * 0.12 + Math.pow((x - W / 2) / W, 2) * H * 0.4); if ((x + Math.floor(t * 4)) % 3) g.fillRect(x, y, 1, 1); }
+      for (let x = 0; x < W; x++) { const y = Math.round(horizon * 0.17 + Math.pow((x - W / 2) / W, 2) * horizon * 0.57); if ((x + Math.floor(t * 4)) % 3) g.fillRect(x, y, 1, 1); }
     }
     // clouds
     for (const c of clouds) {
@@ -404,14 +433,14 @@
     // mountains
     const mtn = R.hex(R.mix(sky.top, [20, 22, 40], 0.6)), mtn2 = R.hex(R.mix(sky.bot, [20, 22, 40], 0.65));
     for (let x = 0; x < W; x++) {
-      const h1 = Math.round(horizon - 6 - hills[x] * H * 0.18);
+      const h1 = Math.round(horizon - 6 - hills[x] * MU * 0.18);
       g.fillStyle = mtn; g.fillRect(x, h1, 1, horizon - h1);
-      const h2 = Math.round(horizon - 2 - hills[(x * 3 + 50) % hills.length] * H * 0.08);
+      const h2 = Math.round(horizon - 2 - hills[(x * 3 + 50) % hills.length] * MU * 0.08);
       g.fillStyle = mtn2; g.fillRect(x, h2, 1, horizon - h2);
     }
     if (S.projects.p_earth) {
       // a billboard on the ridge
-      const bx = Math.round(W * 0.72), by = Math.round(horizon - H * 0.17);
+      const bx = Math.round(W * 0.72), by = Math.round(horizon - MU * 0.17);
       g.fillStyle = '#0a0f26'; g.fillRect(bx - 1, by - 1, 46, 10); g.fillRect(bx + 10, by + 8, 2, 10); g.fillRect(bx + 32, by + 8, 2, 10);
       g.fillStyle = '#ffd866'; g.fillRect(bx, by, 44, 8);
       R.text(g, 'ASTROTECH', bx + 4, by + 2, '#0a0f26', null, 's');
@@ -429,7 +458,7 @@
       g.fillStyle = sky.dark > 0.5 ? '#2a3a6a' : '#e8f8ff'; g.fillRect(gx, gy, 2, 1);
     }
     // apron
-    const apronY = Math.round(H * 0.84);
+    const apronY = H - Math.round(MU * 0.16);
     g.fillStyle = sky.dark > 0.5 ? '#262a36' : '#8a8a80'; g.fillRect(seaW + 10, apronY, W, H - apronY);
     g.fillStyle = sky.dark > 0.5 ? '#1c1f28' : '#6a6a62';
     for (let x = seaW + 12; x < W; x += 9) g.fillRect(x, apronY + 1, 1, H - apronY);
@@ -559,10 +588,11 @@
     const bgs = [['#05060f', '#0b0e22'], ['#04060f', '#0a1428'], ['#030409', '#0a0c18'], ['#0a0410', '#1a0a1e'], ['#010103', '#08050f']];
     fillBg(bgs[reg][0], bgs[reg][1]);
     starfield(dt, 0, 2);
-    const cx = W * 0.42, cy = H * 0.52;
+    const SU = Math.min(H, W * 0.7); // size unit: the smaller dimension (portrait-ish canvases are sized by their width)
+    const cx = W * (0.42 + 0.08 * AF), cy = H * 0.52;
     if (!tg) { drawHome(S, cx, cy); return; }
     const cls = AT.CLASSES[tg.cls];
-    const rad = Math.round(H * (cls.kind === 'galaxy' || cls.kind === 'elliptical' || cls.kind === 'quasar' ? 0.42 : 0.3));
+    const rad = Math.round(SU * (cls.kind === 'galaxy' || cls.kind === 'elliptical' || cls.kind === 'quasar' ? 0.42 : 0.3));
     const rot = t * 0.12 * R.motion();
     if (reg <= 2) { // distant sun
       const sr = [10, 3, 1][reg];
@@ -627,7 +657,7 @@
     if (here.length) R.text(g, here.length + ' SHIP' + (here.length > 1 ? 'S' : '') + ' ASSIGNED', 5, H - 8, '#ffd866', '#000');
   }
   function drawHome(S, cx, cy) {
-    const rad = Math.round(H * 0.32);
+    const rad = Math.round(Math.min(H, W * 0.7) * 0.32);
     R.drawStar(g, W - 22, 20, 8, S.projects.p_sun ? '#ff7a4a' : '#ffe9a0', t, { corona: 0.6 });
     R.drawBody(g, cx, cy, rad, null, { kind: 'earth', tex: R.earthTexture(), rot: t * 0.05, cloudRot: t * 0.02, light: [W - 22 - cx, 20 - cy, 80], atmo: '#86c3ee', cityLights: S.projects.p_earth ? 0.55 : 0.8 });
     const ma = t * 0.08;

@@ -181,20 +181,28 @@ with sync_playwright() as p:
             log('CARD: ' + txt)
 
     def research(name):
+        """Tree nodes are select-only buttons (button.rn); the detail pane's RESEARCH button (#rdbtn) buys the selected node.
+        A LOCKED node names its prerequisite (data-req), so the bot follows that chain like a player reading the node."""
         if not open_tab('research'): return 'notab'
-        nodes = vis('#tabbody button.node')
-        for n in nodes:
-            if name.split()[0] in n.inner_text().lower():
-                if n.is_enabled(): n.click(); pg.wait_for_timeout(120); log('click RESEARCH ' + n.inner_text().replace('\n', ' ')[:40]); return True
-                if 'LOCKED' in n.inner_text():
-                    issue(f'locked_{name[:10]}', f'directive targets "{name}" which shows LOCKED (prerequisite chain); bot follows the tree lines')
-                    row = n.evaluate('e=>e.style.gridRow')
-                    cands = [m for m in nodes if m.evaluate('e=>e.style.gridRow') == row and 'LOCKED' not in m.inner_text() and 'DONE' not in m.inner_text()] or \
-                            [m for m in nodes if 'LOCKED' not in m.inner_text() and 'DONE' not in m.inner_text()]
-                    for m in cands:
-                        if m.is_enabled(): m.click(); pg.wait_for_timeout(120); log('click RESEARCH (prereq) ' + m.inner_text().replace('\n', ' ')[:40]); return True
-                return 'cant_afford'
-        return 'node_not_found'
+        nodes = vis('#tabbody button.rn')
+        want = name.split()[0].lower()
+        node = next((n for n in nodes if want in n.locator('.nn').inner_text().lower().replace('\xad', '')), None)
+        if node is None: return 'node_not_found'
+        for _ in range(8):
+            cls = node.get_attribute('class') or ''
+            if ' done' in cls: return True
+            if 'lockd' in cls:
+                issue(f'locked_{name[:10]}', f'directive targets "{name}" which is locked behind a prerequisite; bot follows the "needs" label')
+                reqs = [r for r in (node.get_attribute('data-req') or '').split(',') if r]
+                nxt = next((pg.locator('#node-' + r) for r in reqs if ' done' not in (pg.locator('#node-' + r).get_attribute('class') or '')), None)
+                if nxt is None: return 'node_not_found'
+                node = nxt; continue
+            node.click(); pg.wait_for_timeout(120)
+            b = pg.locator('#rdbtn')
+            if b.is_enabled():
+                b.click(); pg.wait_for_timeout(120); log('click RESEARCH ' + node.locator('.nn').inner_text().replace('\n', ' ')[:40]); return True
+            return 'cant_afford'
+        return 'cant_afford'
 
     # ---- directive handlers --------------------------------------------
     def do_directive(text):

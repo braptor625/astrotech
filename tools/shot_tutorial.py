@@ -128,7 +128,7 @@ with sync_playwright() as p:
     if first.count():
         first.click(); pg.wait_for_timeout(300)
         check(pg.locator('.man.open .man-b p').count() >= 2, 'clicking a Field Manual entry should expand it')
-    check(pg.locator('.man.locked').count() > 0, 'locked entries should show as Classified')
+    check(pg.locator('.manual ~ .empty, .empty').filter(has_text='classified').count() > 0, 'locked entries should be summarised as classified')
     shot('f1_field_manual')
     # settings: toggle + replay
     pg.click('[data-act=settings]'); pg.wait_for_timeout(300)  # settings are a modal now
