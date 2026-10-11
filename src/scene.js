@@ -101,6 +101,7 @@
   SC.frame = function (dt) {
     const S = AT.E.S;
     if (!g || !S) return;
+    R.beginFrame();
     t += dt;
     FX.begin(g);
     if (view === 'map') drawMap(S, dt);
@@ -128,14 +129,7 @@
       if (tw && s.z === 3) { g.fillRect((s.x | 0) - 1, s.y | 0, 3, 1); g.fillRect(s.x | 0, (s.y | 0) - 1, 1, 3); }
     }
   }
-  function fillBg(c0, c1) {
-    g.fillStyle = c0; g.fillRect(0, 0, W, H);
-    g.fillStyle = c1;
-    for (let y = Math.floor(H * 0.5); y < H; y++) {
-      const p = (y - H * 0.5) / (H * 0.5);
-      for (let x = y & 1; x < W; x += 2) if (((x * 13 + y * 7) % 10) / 10 < p * 0.8) g.fillRect(x, y, 1, 1);
-    }
-  }
+  function fillBg(c0, c1) { R.bgFill(g, W, H, c0, c1); }
 
   // =====================================================================
   // SYSTEM MAP
@@ -202,7 +196,7 @@
       R.disc(g, c.x + Math.cos(ma) * mr * 1.6, c.y + Math.sin(ma) * mr * 0.62, 2, '#c4471c');
       const ja = t * 0.004 + 1, jr = H * 0.62;
       const jx = c.x + Math.cos(ja) * jr * 1.6, jy = c.y + Math.sin(ja) * jr * 0.62;
-      if (jx > -10 && jx < W + 10 && jy > -10 && jy < H + 10) R.drawBody(g, jx, jy, 6, ['#3a2a1a', '#9a6a3a', '#d9b07a', '#f0d8b0'], { kind: 'band', tex: R.bandTexture(4), rot: t * 0.3, light: [c.x - jx, c.y - jy, 2] });
+      if (jx > -10 && jx < W + 10 && jy > -10 && jy < H + 10) R.drawBody(g, jx, jy, 6, ['#3a2a1a', '#9a6a3a', '#d9b07a', '#f0d8b0'], { kind: 'band', tex: R.bandTexture(4), rot: t * 0.3, light: [c.x - jx, c.y - jy, 2], ring: { inner: 1.45, outer: 2.2, elev: 0.3, ang: -0.3, cols: ['#4a3a2a', '#9a8260', '#d8c49a'] } });
     } else if (r === 1) {
       const pl = [[0.08, '#d9b07a'], [0.14, '#e8d090'], [0.21, '#86c3ee'], [0.27, '#4f6ad6']];
       for (const [k] of pl) R.ellipse(g, c.x, c.y, H * k * 1.6, H * k * 0.62, '#26305a', 2);
@@ -564,21 +558,15 @@
     if (!tg) { drawHome(S, cx, cy); return; }
     const cls = AT.CLASSES[tg.cls];
     const rad = Math.round(H * (cls.kind === 'galaxy' || cls.kind === 'elliptical' || cls.kind === 'quasar' ? 0.42 : 0.3));
-    const rot = t * 0.12;
+    const rot = t * 0.12 * R.motion();
     if (reg <= 2) { // distant sun
       const sr = [10, 3, 1][reg];
-      R.drawStar(g, W - 26, 22, sr, '#ffe9a0', t, { corona: 0.6 });
+      R.drawStar(g, W - 26, 22, sr, '#ffe9a0', t, { corona: 0.6, spikes: sr > 4 });
     }
     const pal = domPal(tg);
     const light = [W - 26 - cx, 22 - cy, 60];
     if (cls.kind === 'star' || cls.kind === 'pulsar') {
-      R.drawStar(g, cx, cy, rad, cls.tint, t, { corona: 0.45 });
-      if (cls.kind === 'pulsar') {
-        const a = t * 3;
-        for (let k = rad; k < H; k++) {
-          for (const s of [1, -1]) { g.fillStyle = k % 3 ? '#e8ecff' : '#9ca6ff'; g.fillRect(Math.round(cx + Math.cos(a) * k * s), Math.round(cy + Math.sin(a) * k * s * 0.5), 1, 1); }
-        }
-      }
+      R.drawStar(g, cx, cy, rad, cls.tint, t, { corona: 0.45, spikes: true, pulsar: cls.kind === 'pulsar' });
       if (tg.outpost) dyson(cx, cy, rad, tg.outpost.lvl);
     } else if (cls.kind === 'galaxy' || cls.kind === 'elliptical' || cls.kind === 'quasar') {
       R.drawGalaxy(g, cx, cy, rad, cls.tint, t * 4, tg.seed, cls.kind, 0.55);
@@ -587,6 +575,7 @@
       beacon(cx, cy, rad, pal);
     } else {
       const tex = R.rockTexture(tg.seed % 5000, { icy: cls.kind !== 'rock' });
+      const metal = tg.cls === 'M' || tg.cls === 'V';
       if (cls.kind === 'comet') {
         for (let k = 0; k < 3; k++) FX.comet('target', cx - rad * 0.6, cy + (Math.random() - 0.5) * rad, Math.PI + 0.25, dt);
       }
@@ -594,7 +583,8 @@
         R.drawBody(g, cx - rad * 0.45, cy, rad * 0.62, pal.body, { tex, rot, light, ore: pal.ore });
         R.drawBody(g, cx + rad * 0.5, cy + 2, rad * 0.5, pal.body, { tex: R.rockTexture((tg.seed + 7) % 5000, { icy: true }), rot: rot * 1.1, light, ore: pal.ore });
       } else {
-        R.drawBody(g, cx, cy, rad, pal.body, { tex, rot, light, ore: pal.ore });
+        const ring = cls.kind === 'ice' && tg.seed % 4 === 0 ? { inner: 1.35, outer: 2.0, elev: 0.32, ang: -0.35, cols: ['#3a3a4a', pal.body[2], pal.body[4]] } : null;
+        R.drawBody(g, cx, cy, rad, pal.body, { tex, rot, light, ore: pal.ore, spec: metal ? 0.9 : 0.12, metal, ring });
       }
       if (tg.outpost) outpostOnBody(cx, cy, rad, rot, tg);
     }

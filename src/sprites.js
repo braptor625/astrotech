@@ -280,7 +280,7 @@
     if (cache[key]) return cache[key];
     const o = AT.ORES[id];
     const c = canvas(12, 12), g = c.getContext('2d');
-    AT.R.drawBody(g, 6, 6, 4.6, o.pal, { tex: AT.R.rockTexture(id.length * 977 + id.charCodeAt(0)), rot: 0.6 });
+    AT.R.drawBody(g, 6, 6, 4.6, o.pal, { tex: AT.R.rockTexture(id.length * 977 + id.charCodeAt(0), { tier: 'low' }), rot: 0.6 });
     return (cache[key] = c.toDataURL());
   };
   SPR.oreImg = function (id) { return '<img class="ico" src="' + SPR.oreIcon(id) + '" alt="" draggable="false">'; };
@@ -292,7 +292,7 @@
     const pal = Object.keys(t.comp).length ? AT.ORES[Object.entries(t.comp).sort((a, b) => b[1] - a[1])[0][0]].pal : ['#222', '#555', '#999', '#ddd'];
     if (cls.kind === 'star' || cls.kind === 'pulsar') AT.R.drawStar(g, 10, 10, 6, cls.tint, 0, { corona: 0.4 });
     else if (cls.kind === 'galaxy' || cls.kind === 'elliptical' || cls.kind === 'quasar') AT.R.drawGalaxy(g, 10, 10, 9, cls.tint, 0, t.seed, cls.kind);
-    else AT.R.drawBody(g, 10, 10, 7.5, ['#0e1120', pal[0], pal[1], pal[2], pal[3]], { tex: AT.R.rockTexture(t.seed % 5000, { icy: cls.kind !== 'rock' }), rot: 0.5, ore: [pal[3], '#ffd866'] });
+    else AT.R.drawBody(g, 10, 10, 7.5, ['#0e1120', pal[0], pal[1], pal[2], pal[3]], { tex: AT.R.rockTexture(t.seed % 5000, { icy: cls.kind !== 'rock', tier: 'low' }), rot: 0.5, ore: [pal[3], '#ffd866'] });
     return (cache[key] = c.toDataURL());
   };
 
