@@ -212,7 +212,7 @@
       R.drawStar(g, c.x, c.y, 6, '#ffd866', t, { corona: 0.6 });
       const e = earthPos();
       R.drawBody(g, e.x, e.y, 3.5, null, { kind: 'earth', tex: R.earthTexture(), rot: t * 0.5, cloudRot: t * 0.2, light: [c.x - e.x, c.y - e.y, 2] });
-      R.text(g, 'EARTH', e.x - 9, e.y + 6, '#86c3ee', '#000');
+      R.text(g, 'EARTH', e.x - R.textWidth('EARTH') / 2, e.y + 6, '#86c3ee', '#000');
       const ma = t * 0.012 + 4, mr = H * 0.3;
       R.disc(g, c.x + Math.cos(ma) * mr * 1.6, c.y + Math.sin(ma) * mr * 0.62, 2, '#c4471c');
       const ja = t * 0.004 + 1, jr = H * 0.62;
@@ -232,7 +232,7 @@
         g.fillRect(Math.round(c.x + Math.cos(a) * rr * 1.6), Math.round(c.y + Math.sin(a) * rr * 0.62), 1, 1);
       }
       R.drawStar(g, c.x, c.y, 2, '#fff2b0', t, { corona: 0.8 });
-      R.text(g, 'NEPTUNE', c.x + H * 0.27 * 1.6 - 12, c.y + 6, '#4f6ad6', '#000');
+      R.text(g, 'NEPTUNE', c.x + H * 0.27 * 1.6 - R.textWidth('NEPTUNE') / 2, c.y + 6, '#4f6ad6', '#000');
     } else if (r === 2) {
       const rand = SPR.rng(9);
       for (let i = 0; i < 1100; i++) {
@@ -242,14 +242,14 @@
       }
       R.ellipse(g, c.x, c.y, H * 0.06 * 1.6, H * 0.06 * 0.62, '#2a3460', 2);
       g.fillStyle = '#fffbe6'; g.fillRect(Math.round(c.x), Math.round(c.y), 1, 1);
-      R.text(g, 'SOL', c.x - 5, c.y + 4, '#8b97c9', '#000');
+      R.text(g, 'SOL', c.x - R.textWidth('SOL') / 2, c.y + 4, '#8b97c9', '#000');
     } else if (r === 3) {
       R.drawStar(g, c.x, c.y, 2.5, '#ffd866', t, { corona: 0.6 });
-      R.text(g, 'SOL', c.x - 5, c.y + 6, '#ffd866', '#000');
+      R.text(g, 'SOL', c.x - R.textWidth('SOL') / 2, c.y + 6, '#ffd866', '#000');
       for (let k = 1; k <= 3; k++) R.ellipse(g, c.x, c.y, H * 0.15 * k * 1.6, H * 0.15 * k * 0.85, '#2a1a3a', 3);
     } else {
       R.drawGalaxy(g, c.x, c.y, H * 0.13, '#a898ff', t, 77, 'galaxy', 0.5);
-      R.text(g, 'MILKY WAY', c.x - 17, c.y + H * 0.08, '#a898ff', '#000');
+      R.text(g, 'MILKY WAY', c.x - R.textWidth('MILKY WAY') / 2, c.y + H * 0.08, '#a898ff', '#000');
     }
     // targets
     for (const tg of S.targets) {
@@ -259,7 +259,7 @@
       const left = AT.E.targetLeft(tg) / (tg.size * (AT.E.mults().flags.deep ? 100 : 1));
       if (tg.story) {
         const blink = Math.sin(t * 5) > 0;
-        R.text(g, '*', p.x - 1, p.y - 2, blink ? '#ffd866' : '#ff8f3d', '#000');
+        R.text(g, '*', p.x - 1, p.y - 2, blink ? '#ffd866' : '#ff8f3d', '#000', 's');
       } else if (cls.kind === 'star' || cls.kind === 'pulsar') {
         R.disc(g, p.x, p.y, 2, cls.tint); g.fillStyle = '#fff'; g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
       } else if (cls.kind === 'galaxy' || cls.kind === 'elliptical' || cls.kind === 'quasar') {
@@ -320,21 +320,22 @@
     if (hl && hl.region === r) {
       const p = SC.targetPos(hl);
       const label = hl.name.length > 26 ? hl.name.slice(0, 26) : hl.name;
-      const w = R.textWidth(label) + 4;
+      const w = R.textWidth(label) + 4, bh = R.textH() + 1; // box: text plus 1px pad top and bottom
       let lx = Math.round(p.x + 7), ly = Math.round(p.y - 10);
       if (lx + w > W - 2) lx = Math.round(p.x - 7 - w);
       if (ly < 2) ly = Math.round(p.y + 6);
       // keep clear of the EARTH label box (drawn above); try the other sides of the target
       const ep = r === 0 ? earthPos() : null;
-      const ex = ep ? Math.round(ep.x) - 9 : 0, ey = ep ? Math.round(ep.y) + 6 : 0;
-      const hits = (x, y) => ep && x - 1 < ex + 21 && ex - 1 < x + w && y - 1 < ey + 7 && ey - 1 < y + 7;
+      const eW = R.textWidth('EARTH'), eH = R.textH();
+      const ex = ep ? Math.round(ep.x - eW / 2) : 0, ey = ep ? Math.round(ep.y) + 6 : 0;
+      const hits = (x, y) => ep && x - 1 < ex + eW + 1 && ex - 1 < x - 1 + w && y - 1 < ey + eH && ey - 1 < y - 1 + bh;
       if (hits(lx, ly)) {
         const alt = [[p.x + 7, p.y + 6], [p.x - 7 - w, p.y - 10], [p.x - 7 - w, p.y + 6]];
-        const free = alt.map(([x, y]) => [Math.round(Math.min(Math.max(x, 2), W - 2 - w)), Math.round(Math.min(Math.max(y, 2), H - 9))]).find(([x, y]) => !hits(x, y));
+        const free = alt.map(([x, y]) => [Math.round(Math.min(Math.max(x, 2), W - 2 - w)), Math.round(Math.min(Math.max(y, 2), H - bh))]).find(([x, y]) => !hits(x, y));
         if (free) [lx, ly] = free;
       }
-      g.fillStyle = '#05070fcc'; g.fillRect(lx - 1, ly - 1, w, 8);
-      R.text(g, label, lx + 1, ly + 1, hl.story ? '#ffd866' : '#e8ecff');
+      g.fillStyle = '#05070fcc'; g.fillRect(lx - 1, ly - 1, w, bh);
+      R.text(g, label, lx + 1, ly, hl.story ? '#ffd866' : '#e8ecff');
     }
     // legend
     R.text(g, AT.REGIONS[r].name, 4, H - 8, '#5a6496');
@@ -426,7 +427,7 @@
       const bx = Math.round(W * 0.72), by = Math.round(horizon - H * 0.17);
       g.fillStyle = '#0a0f26'; g.fillRect(bx - 1, by - 1, 46, 10); g.fillRect(bx + 10, by + 8, 2, 10); g.fillRect(bx + 32, by + 8, 2, 10);
       g.fillStyle = '#ffd866'; g.fillRect(bx, by, 44, 8);
-      R.text(g, 'ASTROTECH', bx + 4, by + 2, '#0a0f26');
+      R.text(g, 'ASTROTECH', bx + 4, by + 2, '#0a0f26', null, 's');
     }
     // sea and land
     const seaW = Math.round(W * 0.22);
@@ -452,7 +453,7 @@
     g.fillStyle = '#0a0f26'; g.fillRect(hx - 1, hy - 1, 30, 12);
     g.fillStyle = sky.dark > 0.5 ? '#1e2230' : '#c8ccd8'; g.fillRect(hx, hy, 28, 10);
     for (let k = 0; k < 6; k++) { g.fillStyle = sky.dark > 0.5 ? (Math.sin(k * 3.1 + Math.floor(t)) > 0 ? '#ffd866' : '#3a3e4a') : '#5a72c4'; g.fillRect(hx + 2 + k * 4, hy + 2, 2, 2); g.fillRect(hx + 2 + k * 4, hy + 6, 2, 2); }
-    g.fillStyle = '#ffd866'; g.fillRect(hx + 9, hy - 4, 10, 3); R.text(g, 'AT', hx + 11, hy - 4, '#0a0f26');
+    g.fillStyle = '#ffd866'; g.fillRect(hx + 9, hy - 4, 10, 3); R.text(g, 'AT', hx + 11, hy - 4, '#0a0f26', null, 's');
     // refinery towers in the back
     const towers = Math.min(6, 1 + S.region + Math.floor(S.ships.length / 5));
     for (let i = 0; i < towers; i++) {
@@ -507,10 +508,10 @@
       g.drawImage(img, Math.round(x - img.width / 2), apronY - 4 - img.height + 1);
       if (s.state === 'repair') {
         if (Math.random() < 0.4) spawn(x + (Math.random() - 0.5) * img.width, apronY - 3 - Math.random() * img.height, 2, { speed: 14, life: 0.4, colors: ['#ffd866', '#ffffff'], gravity: 40, view: 'launch' });
-        R.text(g, 'REPAIR', x - 11, apronY + 3, '#ffd866', '#000');
+        R.text(g, 'REPAIR', x - R.textWidth('REPAIR') / 2, apronY + 3, '#ffd866', '#000');
       }
     });
-    if (S.pads > nPads) R.text(g, '+' + (S.pads - nPads) + ' PADS', W - 34, apronY + 6, '#e8ecff', '#000');
+    if (S.pads > nPads) { const pt = '+' + (S.pads - nPads) + ' PADS'; R.text(g, pt, W - 6 - R.textWidth(pt), apronY + 6, '#e8ecff', '#000'); }
     // launches
     for (const L of launches) {
       L.t += dt;
@@ -631,14 +632,15 @@
     // overlay
     const left = AT.E.targetLeft(tg), size = tg.size * (AT.E.mults().flags.deep ? 100 : 1);
     R.text(g, tg.name, 5, 5, tg.story ? '#ffd866' : '#e8ecff', '#000');
-    R.text(g, cls.long + (tg.rich && tg.surveyed ? '  RICH ' + AT.ORES[tg.rich].name : ''), 5, 12, '#8b97c9', '#000');
+    R.text(g, cls.long + (tg.rich && tg.surveyed ? '  RICH ' + AT.ORES[tg.rich].name : ''), 5, 13, '#8b97c9', '#000');
     if (!tg.story) {
-      R.text(g, 'RESERVE', 5, 20, '#5a6496', '#000');
-      g.fillStyle = '#1d2a63'; g.fillRect(36, 20, 50, 5);
-      g.fillStyle = left / size < 0.25 ? '#ff6b6b' : '#6be08a'; g.fillRect(36, 20, Math.round(50 * Math.max(0, left / size)), 5);
-    } else R.text(g, 'EXPEDITION TARGET', 5, 20, '#ffd866', '#000');
-    R.text(g, 'HAZARD ' + Math.round((tg.surveyed ? tg.haz : tg.hazEst) * 100) + '%' + (tg.surveyed ? '' : ' (EST)'), 5, 28, '#ff8f3d', '#000');
-    if (tg.outpost) R.text(g, AT.OUTPOST.names[tg.region].toUpperCase() + ' LV ' + tg.outpost.lvl, 5, 36, '#6be08a', '#000');
+      R.text(g, 'RESERVE', 5, 21, '#5a6496', '#000');
+      const bx = 5 + R.textWidth('RESERVE') + 6;
+      g.fillStyle = '#1d2a63'; g.fillRect(bx, 22, 50, 5);
+      g.fillStyle = left / size < 0.25 ? '#ff6b6b' : '#6be08a'; g.fillRect(bx, 22, Math.round(50 * Math.max(0, left / size)), 5);
+    } else R.text(g, 'EXPEDITION TARGET', 5, 21, '#ffd866', '#000');
+    R.text(g, 'HAZARD ' + Math.round((tg.surveyed ? tg.haz : tg.hazEst) * 100) + '%' + (tg.surveyed ? '' : ' (EST)'), 5, 29, '#ff8f3d', '#000');
+    if (tg.outpost) R.text(g, AT.OUTPOST.names[tg.region].toUpperCase() + ' LV ' + tg.outpost.lvl, 5, 37, '#6be08a', '#000');
     if (here.length) R.text(g, here.length + ' SHIP' + (here.length > 1 ? 'S' : '') + ' ASSIGNED', 5, H - 8, '#ffd866', '#000');
   }
   function drawHome(S, cx, cy) {
@@ -656,7 +658,7 @@
       g.fillStyle = '#ffd866'; g.fillRect(Math.round(x), Math.round(y), 1, 1);
     });
     R.text(g, 'EARTH  -  HOME OFFICE', 5, 5, '#e8ecff', '#000');
-    R.text(g, 'SELECT A TARGET TO INSPECT IT', 5, 12, '#8b97c9', '#000');
+    R.text(g, 'SELECT A TARGET TO INSPECT IT', 5, 13, '#8b97c9', '#000');
   }
   function outpostOnBody(cx, cy, rad, rot, tg) {
     const n = Math.min(6, 2 + Math.floor(tg.outpost.lvl / 10));
