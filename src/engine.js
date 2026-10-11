@@ -56,7 +56,8 @@
       story: {}, log: [], strike: false,
       stats: { missions: 0, launched: 0, losses: 0, deaths: 0, contracts: 0, incidents: 0, totalTime: 0, oreMined: 0, oreSold: 0, surveyed: 0 },
       ach: {}, ended: false, ngPlus: 0,
-      settings: { notation: 'short', sound: true, scanlines: true, buyAmt: 1, noConfirm: false },
+      settings: { notation: 'short', sound: true, scanlines: true, buyAmt: 1, noConfirm: false, textSize: 'large', gfx: 'high', highContrast: false,
+        reduceMotion: typeof matchMedia === 'function' && !!matchMedia('(prefers-reduced-motion: reduce)').matches },
       reveal: {}, selTarget: null, selShip: null,
     };
   };
