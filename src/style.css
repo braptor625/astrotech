@@ -600,3 +600,30 @@ dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 .op-build .bar { margin-top: 0; }
 @container con (max-width: 640px) { .mk-ore canvas, .mk-ore .btn:not(.gold), .row.hdr > :nth-child(6), .row.hdr > :nth-child(7) { display: none; } .mk-ore, .row.hdr { --cols: 28px minmax(52px, 1fr) 2.8em 3.6em 3em 5.2em !important; } }
 .mk-ore, .row.hdr { column-gap: 8px; }
+
+/* === console: projects/company/archive === */
+/* Projects: dense rows, one gold BUY per row, completed log lines dimmed */
+.plist { display: grid; }
+.plist .row { padding: 7px 4px; }
+.pname { min-width: 0; display: grid; gap: 3px; }
+.pname b { font-family: var(--f-display); font-weight: 400; font-size: var(--fs-s); color: var(--ink); overflow-wrap: anywhere; }
+.pname small { font-size: var(--fb-xs); color: var(--dim); line-height: 1.1; }
+.prow .pcost { font-size: var(--fb-s); color: var(--dim); white-space: nowrap; }
+.prow .pcost.can { color: var(--gold); }
+.row.pdone .pname small { color: var(--faint); }
+
+/* Company: key-number strip */
+.kstrip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); background: var(--slot-lo); box-shadow: inset 0 0 0 2px var(--edge); margin: 0 0 8px; }
+.kstrip > div { min-width: 0; padding: 7px 10px 8px; }
+.kstrip > div + div { box-shadow: inset 2px 0 0 var(--edge); }
+.kstrip .k { font-family: var(--f-display); font-size: var(--fs-xs); color: var(--dim); }
+.kstrip .v { font-size: var(--fb-l); line-height: 1.05; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kstrip .v.gold { color: var(--gold); }
+.kstrip .v.good { color: var(--good); }
+
+/* Archive: lighter bevels inside sections (the section is the only panel bevel) */
+.sect .art.slot, .sect .ach.slot, .sect .man.slot { box-shadow: inset 0 0 0 2px var(--edge); clip-path: none; }
+.sect .dir { padding: 3px 6px; }
+.sect .dir.cur { background: color-mix(in srgb, var(--slot-lo) 70%, transparent); box-shadow: inset 4px 0 0 var(--gold); }
+.sect .arts, .sect .achs { margin-top: 2px; }
+.sect .memorial { padding: 4px 0 0; }
