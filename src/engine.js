@@ -1536,7 +1536,8 @@
         if (!S.strike) { S.strike = true; S.strikeT = 0; E.say('strike'); E.log('STRIKE: payroll missed. Staff bonuses and research halted.', 'warn'); E.touch(); M = E.mults(); }
         // unpaid staff eventually walk out, which lets payroll recover
         S.strikeT = (S.strikeT || 0) + dt;
-        if (S.strikeT > 45) {
+        // nobody walks out while the player is away: offline catch-up may strike, never empty the company
+        if (S.strikeT > 45 && !away) {
           S.strikeT = 30;
           const role = AT.STAFF.slice().sort((a, b) => S.staff[b.id] - S.staff[a.id])[0];
           if (S.staff[role.id] > 0) { S.staff[role.id]--; E.log(`An unpaid ${role.name.toLowerCase()} quit.`, 'down'); E.touch(); M = E.mults(); }
@@ -1735,12 +1736,16 @@
     if (S.region === 4 && S.peakEquity >= AT.FINAL_REQ * 1e-12) E.say('nearEnd');
   }
 
-  E.simulate = function (seconds) {
+  let away = false;
+  // opts.away: offline catch-up (the player was not there to react), see payroll
+  E.simulate = function (seconds, opts) {
     const steps = Math.min(4000, Math.max(1, Math.ceil(seconds / 0.5)));
     const dt = seconds / steps;
     const eb = E.S.earnedTotal, mb = E.S.stats.missions;
-    for (let i = 0; i < steps; i++) E.tick(dt);
-    return { earned: E.S.earnedTotal - eb, missions: E.S.stats.missions - mb };
+    let struck = 0;
+    away = !!(opts && opts.away);
+    try { for (let i = 0; i < steps; i++) { E.tick(dt); if (E.S.strike) struck += dt; } } finally { away = false; }
+    return { earned: E.S.earnedTotal - eb, missions: E.S.stats.missions - mb, struck };
   };
   E.offlineCap = function () { return (8 + E.mults().offline) * 3600; };
 

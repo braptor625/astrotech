@@ -97,8 +97,10 @@
   function renderTabs() {
     const S = E.S, M = E.mults(), dtab = directiveTab();
     const worn = !M.flags.autorepair && S.ships.some((x) => x.state === 'idle' && x.cond < 0.6);
-    const hintOn = (id) => id === dtab || (worn && id === 'fleet');
     const badges = navBadges(S, M);
+    // the pulse means "act here now": a research directive only pulses while a node is actually affordable
+    const actionable = (id) => id !== 'research' || !!badges.research;
+    const hintOn = (id) => (id === dtab && actionable(id)) || (worn && id === 'fleet');
     let html = '', group = '', key = 0;
     for (const t of TABS) {
       if (!S.reveal[t.id]) continue;
@@ -1441,8 +1443,8 @@
     if (away > 60) {
       const cap = E.offlineCap();
       const secs = Math.min(away, cap);
-      const res = E.simulate(secs);
-      modal(`<h2>Welcome Back</h2><p class="note">You were away for ${AT.fmtTime(away)}${away > secs ? ` (offline progress caps at ${AT.fmtTime(cap)})` : ''}. Operations continued without you.</p><div class="slot"><div class="spread"><span>Revenue earned</span><b style="color:var(--gold);font-weight:400">${money(res.earned)}</b></div><div class="spread"><span>Missions completed</span><b style="font-weight:400">${fmt(res.missions)}</b></div></div><button class="btn gold" data-act="modal-close">BACK TO WORK</button>`);
+      const res = E.simulate(secs, { away: true });
+      modal(`<h2>Welcome Back</h2><p class="note">You were away for ${AT.fmtTime(away)}${away > secs ? ` (offline progress caps at ${AT.fmtTime(cap)})` : ''}. Operations continued without you.</p><div class="slot"><div class="spread"><span>Revenue earned</span><b style="color:var(--gold);font-weight:400">${money(res.earned)}</b></div><div class="spread"><span>Missions completed</span><b style="font-weight:400">${fmt(res.missions)}</b></div>${res.struck > 60 ? `<div class="spread"><span>Crew on strike</span><b style="color:var(--warn);font-weight:400">${AT.fmtTime(res.struck)}</b></div>` : ''}</div>${res.struck > 60 ? `<p class="note">Payroll ran dry while you were out. The crew stopped work but nobody left. Clear the strike by earning or selling cargo.</p>` : ''}${res.missions === 0 && !E.mults().flags.flight ? `<p class="note">Ships sit idle without orders. Research FLIGHT DIRECTOR so they keep flying while you are away.</p>` : ''}<button class="btn gold" data-act="modal-close">BACK TO WORK</button>`);
     }
     bindEvents();
     if (DEMO && E.S.layers[0].runs > 0) showDemoEnd(); // e.g. a full-game save imported into the demo
@@ -1452,7 +1454,7 @@
     let lastT = performance.now(), uiAcc = 0, saveAcc = 0, lastSeen = performance.now();
     function frame(now) {
       let dt = (now - lastT) / 1000; lastT = now; lastSeen = now;
-      if (dt > 5) E.simulate(Math.min(dt, E.offlineCap())); else if (dt > 0) E.tick(Math.min(dt, 1));
+      if (dt > 5) E.simulate(Math.min(dt, E.offlineCap()), { away: true }); else if (dt > 0) E.tick(Math.min(dt, 1));
       AT.scene.frame(Math.min(dt, 0.1));
       uiAcc += dt; saveAcc += dt;
       if (uiAcc >= 0.1) { uiAcc = 0; updateReveal(); renderTabs(); render(); updateTop(); renderDeck(); renderDirective(); renderCard(); renderViewBar(); AT.guide.tick(); placeTip(); }
@@ -1463,7 +1465,7 @@
     requestAnimationFrame(frame);
     setInterval(() => {
       const now = performance.now();
-      if (now - lastSeen > 1500) { const dt = (now - lastT) / 1000; lastT = now; lastSeen = now; E.simulate(Math.min(dt, E.offlineCap())); }
+      if (now - lastSeen > 1500) { const dt = (now - lastT) / 1000; lastT = now; lastSeen = now; E.simulate(Math.min(dt, E.offlineCap()), { away: true }); }
     }, 1000);
     window.addEventListener('beforeunload', saveGame);
     document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
