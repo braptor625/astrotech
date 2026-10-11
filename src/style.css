@@ -142,7 +142,11 @@ main { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(470px, 1fr)
 ::-webkit-scrollbar-thumb { background: var(--slot-hi); border: 3px solid var(--slot-lo); }
 
 /* ---------- tabs ---------- */
-.tabs { display: flex; gap: 4px; flex-wrap: wrap; padding: 2px 2px 8px; }
+.tabs { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tabw, 100px), 1fr)); gap: 4px; padding: 2px 2px 8px; container-type: inline-size; }
+html[data-text="normal"] { --tabw: 92px; } html[data-text="xl"] { --tabw: 124px; }
+.tabs .tab { justify-content: center; min-width: 0; white-space: nowrap; }
+/* narrow console: drop tab icons so ten tabs fit in two tidy rows */
+@container (max-width: 700px) { .tabs .tab img { display: none; } }
 .tab { padding: 5px 7px 4px; font-size: var(--fs-xs); display: inline-flex; align-items: center; gap: 5px; }
 .tab img { width: 20px; height: 20px; }
 .tab .dot { width: 6px; height: 6px; background: var(--bad); box-shadow: 0 0 0 2px var(--edge); display: none; }

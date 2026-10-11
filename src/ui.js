@@ -1079,7 +1079,7 @@
     d.innerHTML = `<img class="ico lg pixel" src="${SPR.icon(icon)}" alt=""><div><b></b><span></span></div>`;
     d.querySelector('b').textContent = title; d.querySelector('span').textContent = text;
     $('#toasts').appendChild(d);
-    while ($('#toasts').children.length > 4) $('#toasts').firstChild.remove();
+    while ($('#toasts').children.length > 2) $('#toasts').firstChild.remove();
     setTimeout(() => d.remove(), 4200);
   }
   UI.toast = toast;
