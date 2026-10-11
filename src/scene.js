@@ -607,16 +607,17 @@
     });
     // overlay
     const left = AT.E.targetLeft(tg), size = tg.size * (AT.E.mults().flags.deep ? 100 : 1);
-    R.text(g, tg.name, 5, 5, tg.story ? '#ffd866' : '#e8ecff', '#000');
-    R.text(g, cls.long + (tg.rich && tg.surveyed ? '  RICH ' + AT.ORES[tg.rich].name : ''), 5, 13, '#8b97c9', '#000');
+    const ls = R.textH() + 2, ly = (k) => 5 + k * ls; // line step follows the canvas font size
+    R.text(g, tg.name, 5, ly(0), tg.story ? '#ffd866' : '#e8ecff', '#000');
+    R.text(g, cls.long + (tg.rich && tg.surveyed ? '  RICH ' + AT.ORES[tg.rich].name : ''), 5, ly(1), '#a4afde', '#000');
     if (!tg.story) {
-      R.text(g, 'RESERVE', 5, 21, '#5a6496', '#000');
-      const bx = 5 + R.textWidth('RESERVE') + 6;
-      g.fillStyle = '#1d2a63'; g.fillRect(bx, 22, 50, 5);
-      g.fillStyle = left / size < 0.25 ? '#ff6b6b' : '#6be08a'; g.fillRect(bx, 22, Math.round(50 * Math.max(0, left / size)), 5);
-    } else R.text(g, 'EXPEDITION TARGET', 5, 21, '#ffd866', '#000');
-    R.text(g, 'HAZARD ' + Math.round((tg.surveyed ? tg.haz : tg.hazEst) * 100) + '%' + (tg.surveyed ? '' : ' (EST)'), 5, 29, '#ff8f3d', '#000');
-    if (tg.outpost) R.text(g, AT.OUTPOST.names[tg.region].toUpperCase() + ' LV ' + tg.outpost.lvl, 5, 37, '#6be08a', '#000');
+      R.text(g, 'RESERVE', 5, ly(2), '#a4afde', '#000');
+      const bx = 5 + R.textWidth('RESERVE') + 6, bh = R.textH() - 3;
+      g.fillStyle = '#1d2a63'; g.fillRect(bx, ly(2) + 1, 50, bh);
+      g.fillStyle = left / size < 0.25 ? '#ff6b6b' : '#6be08a'; g.fillRect(bx, ly(2) + 1, Math.round(50 * Math.max(0, left / size)), bh);
+    } else R.text(g, 'EXPEDITION TARGET', 5, ly(2), '#ffd866', '#000');
+    R.text(g, 'HAZARD ' + Math.round((tg.surveyed ? tg.haz : tg.hazEst) * 100) + '%' + (tg.surveyed ? '' : ' (EST)'), 5, ly(3), '#ff8f3d', '#000');
+    if (tg.outpost) R.text(g, AT.OUTPOST.names[tg.region].toUpperCase() + ' LV ' + tg.outpost.lvl, 5, ly(4), '#6be08a', '#000');
     if (here.length) R.text(g, here.length + ' SHIP' + (here.length > 1 ? 'S' : '') + ' ASSIGNED', 5, H - 8, '#ffd866', '#000');
   }
   function drawHome(S, cx, cy) {
@@ -634,7 +635,7 @@
       g.fillStyle = '#ffd866'; g.fillRect(Math.round(x), Math.round(y), 1, 1);
     });
     R.text(g, 'EARTH  -  HOME OFFICE', 5, 5, '#e8ecff', '#000');
-    R.text(g, 'SELECT A TARGET TO INSPECT IT', 5, 13, '#8b97c9', '#000');
+    R.text(g, 'SELECT A TARGET TO INSPECT IT', 5, 7 + R.textH(), '#a4afde', '#000');
   }
   function outpostOnBody(cx, cy, rad, rot, tg) {
     const n = Math.min(6, 2 + Math.floor(tg.outpost.lvl / 10));
