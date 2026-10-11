@@ -8,14 +8,52 @@ const AT = globalThis.AT, E = AT.E;
 const HOURS = +(process.argv[2] || 4);
 const VERBOSE = process.argv[3] === 'v';
 const CHALL = process.argv.includes('ch');
-E.newGame();
+E.newGame({ skipPrologue: process.argv.includes('skip') });
 const marks = {};
 const out = (s) => console.log(s);
 function mark(k) { if (!marks[k]) { marks[k] = E.S.stats.totalTime; out(`${AT.fmtTime(E.S.stats.totalTime).padStart(9)}  ${k}`); } }
 AT.hooks.log = (e) => { if (VERBOSE && (e.kind === 'prestige')) out(`          [${AT.fmtTime(E.S.stats.totalTime)}] ${e.text}`); };
 
+// ---- the prologue bot: hand-click the first parts, then play the timed jobs sensibly
+const PRO = AT.PROLOGUE;
+const proMarks = {};
+function pmark(k) { if (!proMarks[k]) { proMarks[k] = E.S.stats.totalTime; out(`${AT.fmtTime(E.S.stats.totalTime).padStart(9)}  [prologue] ${k}`); } }
+AT.hooks.event = (kind, arg) => {
+  if (kind === 'proStaticFire') { if (!proMarks['first static fire']) pmark('first static fire'); if (arg.boom) pmark('first engine lost on the stand'); }
+  if (kind === 'proAttemptResult') pmark(`${arg.tier} ${arg.ok ? 'SUCCESS' : 'FAILED (explosion)'}${arg.ok ? '' : ' [x' + (E.S.pro ? E.S.pro.stats.fails : '?') + ']'}`);
+  if (kind === 'certified') { pmark('CERTIFIED'); out(`           carry-over: ${arg.name}, rel avg ${(arg.relAvg * 100).toFixed(1)}%, bonus ${(arg.bonus * 100).toFixed(1)}%, +${AT.fmt(arg.rp)} RP, ${arg.attempts} attempts (${arg.fails} failed), cash left $${AT.fmt(arg.cashLeft)}, data left ${AT.fmt(arg.dataLeft)}`); }
+  if (kind === 'proSkip') pmark('SKIPPED');
+};
+const TH = [0.5, 0.5, 0.45, 0.45]; // success odds the bot wants before it commits parts to each tier
+const RD_ORDER = ['r_tester', 'r_welds', 'r_turbo', 'r_fc', 'r_bay', 'r_telem', 'r_legs', 'r_lathe', 'r_welds2', 'r_turbo2', 'r_fc2', 'r_vab', 'r_sim'];
+let proReady = null;
+function proBot() {
+  const S = E.S, P = S.pro;
+  while (P.cards.length) E.proResolvePitch(0, 'a');
+  for (const g of PRO.grants) E.proClaimGrant(g.id);
+  for (const c of PRO.contracts) E.proAcceptContract(c.id);
+  if (E.proMade() >= 1) pmark('first part');
+  // hand-machine the first three parts, 3 clicks a second; after that the bot never clicks
+  if (E.proMade() < 3) for (let i = 0; i < 3; i++) E.proClick();
+  if (E.proHire('machinist')) pmark('machinist hired');
+  for (const id of RD_ORDER) if (E.proBuyRD(id)) { pmark('R&D ' + id); }
+  if (E.proHire('tester')) pmark('test engineer hired');
+  const nt = E.proNextTier(), T = PRO.tiers[nt];
+  if (process.env.PDBG && Math.floor(P.t) % 60 === 0) out(JSON.stringify({t: P.t, parts: P.parts, jobs: P.jobs.map((j) => j.kind + (j.type || "")), money: S.money, data: P.data, odds: E.proOdds(nt), nt, block: E.proTierBlock(nt), rocket: P.rocket, fa: P.fireAuto}));
+  // static fires: the test engineer does them unattended; before that the bot fires by hand. It stops firing once it commits to a tier.
+  const full = !P.rocket && Object.keys(T.parts).every((k) => P.parts[k] >= T.parts[k]) && !E.proTierBlock(nt);
+  const have = !P.rocket && Object.keys(T.parts).every((k) => E.proHave(k) >= T.parts[k]) && !E.proTierBlock(nt);
+  if (have && proReady === null) proReady = P.t;
+  const commit = have && (E.proOdds(nt) >= TH[nt] || P.t - proReady > 120);
+  const go = full && commit;
+  P.fireAuto = !commit;
+  if (!go && !P.staff.tester && P.made.engine >= 1 && S.money > 200 && !P.jobs.some((j) => j.kind === 'fire' || j.kind === 'assemble')) E.proStaticFire();
+  if (P.rocket && !P.attempt) { E.proAttempt(P.rocket.tier); return; }
+  if (go && !E.proAssembleBlock(nt) && E.proAssemble(nt)) proReady = null;
+}
 function bot() {
   const S = E.S;
+  if (E.proActive()) { proBot(); return; }
   let M = E.mults();
   // cards
   while (S.cards.length) E.resolveCard(0, 'a');
