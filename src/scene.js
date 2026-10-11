@@ -6,7 +6,9 @@
   let cv, g, W = 384, H = 216, scale = 2;
   let view = 'map', mapRegion = 0, t = 0;
   let hover = null, mouse = null;
-  let stars = [], parts = [], clouds = [], hills = [];
+  const FX = AT.FX;
+  let stars = [], clouds = [], hills = [];
+  const arrSeen = {};
   let launches = [], landings = [], booms = [];
   let padOf = {};
   const cb = {};
@@ -39,6 +41,7 @@
     for (let i = 0; i < 7; i++) clouds.push({ x: rand() * W, y: H * (0.08 + rand() * 0.35), w: 18 + rand() * 40, v: 1 + rand() * 3 });
     hills = [];
     for (let x = 0; x <= W; x++) hills.push(R.fbm3(x / 40, 0, 0, 5, 4));
+    FX.resize(W, H);
   };
   SC.setView = function (v) { view = v; };
   SC.getView = function () { return view; };
@@ -67,38 +70,12 @@
   }
 
   // =====================================================================
-  // PARTICLES
-  // =====================================================================
-  function spawn(x, y, n, opts) {
-    for (let i = 0; i < n; i++) {
-      const a = (opts.dir !== undefined ? opts.dir : Math.random() * Math.PI * 2) + (Math.random() - 0.5) * (opts.spread || Math.PI * 2);
-      const s = (opts.speed || 20) * (0.3 + Math.random() * 0.7);
-      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: (opts.life || 1) * (0.5 + Math.random() * 0.5), max: opts.life || 1,
-        c: opts.colors[Math.floor(Math.random() * opts.colors.length)], size: opts.size || 1, grow: opts.grow || 0, drag: opts.drag || 0.96, g: opts.gravity || 0, view: opts.view || view });
-    }
-    if (parts.length > 900) parts.splice(0, parts.length - 900);
-  }
-  function drawParts(dt, which) {
-    for (let i = parts.length - 1; i >= 0; i--) {
-      const p = parts[i];
-      if (p.view !== which) continue;
-      p.life -= dt;
-      if (p.life <= 0) { parts.splice(i, 1); continue; }
-      p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= p.drag; p.vy = p.vy * p.drag + p.g * dt;
-      const sz = Math.max(1, Math.round(p.size + p.grow * (1 - p.life / p.max)));
-      g.fillStyle = p.c;
-      if (sz <= 1) g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
-      else if ((p.life / p.max) > 0.3 || ((Math.round(p.x) + Math.round(p.y)) & 1)) R.disc(g, Math.round(p.x), Math.round(p.y), Math.floor(sz / 2), p.c);
-    }
-  }
-
-  // =====================================================================
   // EVENTS FROM THE ENGINE
   // =====================================================================
   SC.onLaunch = function (m, ship, tg) {
     if (padOf[ship.id] === undefined) { const used = new Set(Object.values(padOf)); let k = 0; while (used.has(k) && k < 3) k++; padOf[ship.id] = k; }
     const pad = padOf[ship.id];
-    launches.push({ pad, hull: ship.hull, t: 0, y: 0, v: 0, id: ship.id });
+    launches.push({ pad, hull: ship.hull, t: 0, y: 0, v: 0, id: ship.id, fx: 0, pfy: 0 });
     if (launches.length > 12) launches.shift();
   };
   SC.onResolve = function (m, ship, tg, outcome) {
@@ -106,11 +83,16 @@
       if (tg) booms.push({ target: tg.id, region: tg.region, t: 0 });
       return;
     }
-    if (ship && ship.state !== 'mission') { delete padOf[ship.id]; landings.push({ id: ship.id, hull: ship.hull, t: 0 }); }
+    if (view === 'map' && tg) {
+      const o = originPos(tg.region);
+      if (outcome === 'ok' || outcome === 'partial') FX.deliveryGlint('map', o.x, o.y);
+      else FX.explosion('map', o.x, o.y, 0.45, 0);
+    }
+    if (ship && ship.state !== 'mission') { delete padOf[ship.id]; landings.push({ id: ship.id, hull: ship.hull, t: 0, fx: 0, dmg: outcome === 'partial' || outcome === 'failed' || outcome === 'fail' }); }
     if (landings.length > 8) landings.shift();
   };
   SC.burst = function () {
-    spawn(W / 2, H / 2, 260, { speed: 160, life: 1.6, colors: ['#ffd866', '#e8ecff', '#86c3ee', '#ff8f3d'], drag: 0.97, view });
+    FX.celebrate();
   };
 
   // =====================================================================
@@ -120,10 +102,13 @@
     const S = AT.E.S;
     if (!g || !S) return;
     t += dt;
+    FX.begin(g);
     if (view === 'map') drawMap(S, dt);
     else if (view === 'launch') drawLaunch(S, dt);
     else drawCloseup(S, dt);
-    drawParts(dt, view);
+    FX.update(dt, view);
+    FX.draw(g, view);
+    FX.end(g);
     // tick down animations even when their view is hidden
     for (const L of launches) L.t += view === 'launch' ? 0 : dt;
     launches = launches.filter((L) => L.t < 7);
@@ -252,6 +237,7 @@
       R.text(g, 'MILKY WAY', c.x - R.textWidth('MILKY WAY') / 2, c.y + H * 0.08, '#a898ff', '#000');
     }
     // targets
+    let comets = 0;
     for (const tg of S.targets) {
       if (tg.region !== r) continue;
       const p = SC.targetPos(tg);
@@ -268,7 +254,7 @@
         g.fillStyle = '#05070f'; g.fillRect(Math.round(p.x) - 2, Math.round(p.y) - 1, 4, 3); g.fillRect(Math.round(p.x) - 1, Math.round(p.y) - 2, 2, 5);
         g.fillStyle = tg.surveyed ? cls.tint : '#6a6f8a';
         g.fillRect(Math.round(p.x) - 1, Math.round(p.y) - 1, 2, 2);
-        if (cls.kind === 'comet') { g.fillStyle = '#4a6a8a'; for (let k = 2; k < 7; k++) if (k % 2) g.fillRect(Math.round(p.x + k), Math.round(p.y - k * 0.3), 1, 1); }
+        if (cls.kind === 'comet' && comets++ < 8) FX.comet('map', p.x, p.y, Math.atan2(p.y - c.y, p.x - c.x), dt);
       }
       if (tg.outpost) { g.fillStyle = '#6be08a'; g.fillRect(Math.round(p.x) + 2, Math.round(p.y) - 4, 2, 2); }
       if (left < 0.25 && !tg.story) { g.fillStyle = '#ff6b6b'; g.fillRect(Math.round(p.x) - 2, Math.round(p.y) + 3, 1, 1); }
@@ -276,10 +262,13 @@
       if (tg.id === S.selTarget) bracket(p.x, p.y, 5 + Math.round(Math.sin(t * 4)), '#ffd866');
     }
     // surveys
+    let svi = 0;
     for (const sv of S.surveys) {
       const tg = AT.E.targetById(sv.target);
       if (!tg || tg.region !== r) continue;
       const o = originPos(r), p = SC.targetPos(tg), f = sv.t / sv.T;
+      svi++;
+      if (Math.floor(t * 0.8 + svi * 0.37) !== Math.floor((t - dt) * 0.8 + svi * 0.37)) FX.ping('map', o.x + (p.x - o.x) * f, o.y + (p.y - o.y) * f);
       g.fillStyle = Math.sin(t * 12) > 0 ? '#6be08a' : '#2f8a4a';
       g.fillRect(Math.round(o.x + (p.x - o.x) * f), Math.round(o.y + (p.y - o.y) * f), 1, 1);
     }
@@ -293,26 +282,26 @@
       else if (m.t < m.out + m.mine) { f = 1; mining = true; }
       else { f = 1 - (m.t - m.out - m.mine) / m.out; dir = -1; }
       const pos = bez(o, p, f, m.id);
-      // trail
-      for (let k = 1; k < 6; k++) {
-        const q = bez(o, p, Math.max(0, Math.min(1, f - dir * k * 0.015)), m.id);
-        g.fillStyle = k < 3 ? '#ff8f3d' : '#7a3a1a';
-        if (!mining) g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1);
+      // glowing engine trail (particles stay behind in the sky) and arrival sparkle
+      if (!mining) {
+        const q = bez(o, p, Math.max(0, Math.min(1, f - dir * 0.02)), m.id);
+        FX.shipTrail('map', pos.x, pos.y, Math.atan2(pos.y - q.y, pos.x - q.x), dt);
       }
+      if (m.t >= m.out && !arrSeen[m.id]) { arrSeen[m.id] = 1; FX.arrival('map', p.x, p.y); }
       let x = pos.x, y = pos.y;
       if (mining) { x += Math.cos(t * 2 + m.id) * 4; y += Math.sin(t * 2 + m.id) * 2; }
       const danger = m.outcome === 'lost' && m.failAt - m.t < 2.5;
       if (danger && Math.sin(t * 20) > 0) { g.fillStyle = '#ff6b6b'; g.fillRect(Math.round(x) - 2, Math.round(y) - 2, 5, 5); }
       const img = SPR.mapShip(ship.hull, (p.x - o.x) * dir >= 0 ? 1 : -1);
       g.drawImage(img, Math.round(x) - 2, Math.round(y) - 2);
-      if (mining && Math.random() < 0.3) spawn(p.x, p.y, 1, { speed: 8, life: 0.5, colors: ['#ffd866', '#fff2b0'], view: 'map' });
+      if (mining) FX.mining('map', p.x, p.y);
     }
     // explosions
     for (const b of booms) {
       if (b.region !== r) continue;
       const tg = AT.E.targetById(b.target);
       if (!tg) continue;
-      if (b.t === 0) { const p = SC.targetPos(tg); spawn(p.x, p.y, 40, { speed: 30, life: 0.9, colors: ['#ff6b6b', '#ffd866', '#ff8f3d', '#e8ecff'], view: 'map' }); }
+      if (b.t === 0) { const p = SC.targetPos(tg); FX.explosion('map', p.x, p.y, 1, 0); }
       b.t += dt;
     }
     // hover label
@@ -390,9 +379,8 @@
       for (let y = y0; y < y1; y++) for (let x = (y & 1); x < W; x += 2) if (((y - y0) / (y1 - y0)) > 0.6 && ((x + y) % 4 === 0)) g.fillRect(x, y, 1, 1);
     }
     // stars at night
-    if (sky.dark > 0.3 && !S.projects.p_milkyway) {
-      for (const s of stars) if (s.y < horizon - 4 && Math.random() < sky.dark) { g.fillStyle = s.z === 3 ? '#e8ecff' : '#6a74a8'; g.fillRect(s.x | 0, s.y | 0, 1, 1); }
-    }
+    FX.setAmbient(sky.dark, horizon);
+    if (sky.dark > 0.3 && !S.projects.p_milkyway) FX.skyStars(g, stars, horizon, sky.dark, t);
     // sun & moon
     const sa = (phase - 0.25) * Math.PI * 2;
     const sx = W * 0.5 - Math.cos(sa) * W * 0.42, sy = horizon - Math.sin(sa) * horizon * 0.85;
@@ -507,7 +495,7 @@
       const x = padX(padOf[s.id]);
       g.drawImage(img, Math.round(x - img.width / 2), apronY - 4 - img.height + 1);
       if (s.state === 'repair') {
-        if (Math.random() < 0.4) spawn(x + (Math.random() - 0.5) * img.width, apronY - 3 - Math.random() * img.height, 2, { speed: 14, life: 0.4, colors: ['#ffd866', '#ffffff'], gravity: 40, view: 'launch' });
+        if (Math.random() < 0.4) FX.repair('launch', x + (Math.random() - 0.5) * img.width, apronY - 3 - Math.random() * img.height);
         R.text(g, 'REPAIR', x - R.textWidth('REPAIR') / 2, apronY + 3, '#ffd866', '#000');
       }
     });
@@ -520,18 +508,14 @@
       if (L.t > 1.2) { L.v += 40 * dt * (1 + L.t); L.y += L.v * dt; }
       const ry = apronY - 4 - img.height + 1 - L.y;
       if (ry + img.height < -20) continue;
-      // flame
-      const fy = ry + img.height - 1;
-      const fl = 4 + Math.random() * 6 + (L.t > 1.2 ? 8 : 0);
-      for (let k = 0; k < fl; k++) {
-        const w = Math.max(1, Math.round((img.nozzleW || 3) * (1 - k / fl)));
-        g.fillStyle = k < 2 ? '#ffffff' : k < fl * 0.5 ? '#ffd866' : '#ff8f3d';
-        g.fillRect(Math.round(x - w / 2), Math.round(fy + k), w, 1);
-      }
-      // smoke
-      const smoke = sky.dark > 0.5 ? ['#3a3e4e', '#2a2e3a', '#4a4e5e'] : ['#e8e8e8', '#c8c8d0', '#a8a8b4'];
-      if (L.t < 2.5) spawn(x, apronY - 2, 3, { dir: Math.random() < 0.5 ? 0 : Math.PI, spread: 0.8, speed: 30, life: 2.2, colors: smoke, size: 3, grow: 6, drag: 0.94, view: 'launch' });
-      else if (Math.random() < 0.6) spawn(x, fy + fl, 1, { dir: Math.PI / 2, spread: 0.6, speed: 6, life: 1.5, colors: smoke, size: 2, grow: 3, view: 'launch' });
+      // layered exhaust: shimmer, direct-drawn plume, then particles (flame, embers, steam, dust, smoke column)
+      const fy = ry + img.height - 1, dark = sky.dark > 0.5, ground = apronY - 2;
+      const hold = L.t < 1.2, thr = hold ? 0.3 + 0.7 * Math.pow(Math.min(1, L.t / 1.2), 2) : 1;
+      if (L.fx < 1) { L.fx = 1; L.pfy = fy; FX.ignition(x, ground, dark); }
+      if (!hold && L.fx < 2) { L.fx = 2; FX.liftoff(x, ground, dark); }
+      FX.shimmer(g, x, ground, L.y, thr, t);
+      FX.plume(g, x, fy + 1, img.nozzleW || 3, 7 + (hold ? 0 : 9 + Math.min(8, L.v / 40)) + Math.random() * 3, thr, t);
+      FX.exhaust(x, fy, L.pfy, ground, L.y, thr, dt, dark, img.nozzleW || 3); L.pfy = fy;
       g.drawImage(img, Math.round(x - img.width / 2), Math.round(ry));
       if (L.t < 0.05) AT.audio && AT.audio.play('launch');
     }
@@ -546,8 +530,10 @@
       const ease = 1 - Math.pow(1 - f, 3);
       const ry = (apronY - 4 - img.height + 1) - (1 - ease) * H;
       const fy = ry + img.height - 1;
-      if (f < 1) for (let k = 0; k < 3 + Math.random() * 3; k++) { g.fillStyle = k < 1 ? '#ffffff' : '#ffd866'; g.fillRect(Math.round(x - 1), Math.round(fy + k), 2, 1); }
-      if (f > 0.85 && f < 1) spawn(x, apronY - 2, 2, { dir: Math.random() < 0.5 ? 0 : Math.PI, spread: 0.6, speed: 20, life: 1, colors: ['#c8c8d0', '#a8a8b4'], size: 2, grow: 3, view: 'launch' });
+      if (f < 1) {
+        FX.plume(g, x, fy + 1, img.nozzleW || 3, 6 + (1 - f) * 12 + Math.random() * 2, 0.5 + 0.5 * (1 - f), t);
+        FX.landing(x, fy, apronY - 2, f, dt, sky.dark > 0.5, L.dmg);
+      } else if (!L.fx) { L.fx = 1; FX.touchdown(x, apronY - 2, sky.dark > 0.5); }
       g.drawImage(img, Math.round(x - img.width / 2), Math.round(ry));
     }
     // floodlights at night
@@ -602,7 +588,7 @@
     } else {
       const tex = R.rockTexture(tg.seed % 5000, { icy: cls.kind !== 'rock' });
       if (cls.kind === 'comet') {
-        for (let k = 0; k < 3; k++) spawn(cx - rad * 0.6, cy + (Math.random() - 0.5) * rad, 1, { dir: Math.PI + 0.25, spread: 0.3, speed: 30, life: 2.4, colors: ['#86c3ee', '#3d79a8', '#c8e8ff'], view: 'target' });
+        for (let k = 0; k < 3; k++) FX.comet('target', cx - rad * 0.6, cy + (Math.random() - 0.5) * rad, Math.PI + 0.25, dt);
       }
       if (cls.kind === 'binary') {
         R.drawBody(g, cx - rad * 0.45, cy, rad * 0.62, pal.body, { tex, rot, light, ore: pal.ore });
@@ -626,7 +612,7 @@
       if (Math.sin(t * 7 + i) > -0.2) {
         const tx = cx + Math.cos(a) * rad * 0.85, ty = cy + Math.sin(a) * rad * 0.8;
         R.line(g, ox - Math.cos(a) * 6, oy - Math.sin(a) * 6, tx, ty, Math.random() < 0.5 ? '#ffd866' : '#fff2b0');
-        if (Math.random() < 0.5) spawn(tx, ty, 2, { speed: 25, life: 0.6, colors: [pal.body[3], pal.body[4], '#ffd866'], view: 'target' });
+        FX.drill('target', tx, ty, a, [pal.body[4], pal.body[3], pal.body[2]], dt);
       }
     });
     // overlay
@@ -669,11 +655,12 @@
       if (!p) continue;
       const kind = i % 3;
       const X = Math.round(p.x), Y = Math.round(p.y);
-      if (kind === 0) { R.disc(g, X, Y - 1, 4, '#0a0f26'); R.disc(g, X, Y - 1, 3, '#c8d0e8'); g.fillStyle = '#86c3ee'; g.fillRect(X - 2, Y - 3, 2, 1); g.fillStyle = '#ffd866'; g.fillRect(X + 1, Y - 1, 1, 1); }
-      else if (kind === 1) { g.fillStyle = '#0a0f26'; g.fillRect(X - 1, Y - 11, 4, 11); g.fillStyle = '#8a90a8'; g.fillRect(X, Y - 10, 2, 10); g.fillStyle = '#c8d0e8'; g.fillRect(X, Y - 10, 1, 10); if (Math.sin(t * 4 + i) > 0) { g.fillStyle = '#ff6b6b'; g.fillRect(X, Y - 12, 2, 1); } }
+      if (kind === 0) { R.disc(g, X, Y - 1, 4, '#0a0f26'); R.disc(g, X, Y - 1, 3, '#c8d0e8'); g.fillStyle = '#86c3ee'; g.fillRect(X - 2, Y - 3, 2, 1); g.fillStyle = '#ffd866'; g.fillRect(X + 1, Y - 1, 1, 1); FX.light(g, X - 1, Y - 3, '#6be08a', t, i * 0.7, 2.4, 0.25); }
+      else if (kind === 1) { g.fillStyle = '#0a0f26'; g.fillRect(X - 1, Y - 11, 4, 11); g.fillStyle = '#8a90a8'; g.fillRect(X, Y - 10, 2, 10); g.fillStyle = '#c8d0e8'; g.fillRect(X, Y - 10, 1, 10); FX.light(g, X + 0.5, Y - 12, '#ff6b6b', t, i * 0.37, 1.4); }
       else {
         g.fillStyle = '#0a0f26'; g.fillRect(X - 3, Y - 3, 7, 5); g.fillStyle = '#ffd866'; g.fillRect(X - 2, Y - 2, 5, 3); g.fillStyle = '#a8841f'; g.fillRect(X - 2, Y, 5, 1);
-        if (Math.random() < 0.15) spawn(p.x, p.y, 1, { dir: Math.atan2(p.y - cy, p.x - cx), spread: 0.1, speed: 70, life: 1.2, colors: ['#ffd866', '#fff2b0'], drag: 1, view: 'target' });
+        FX.light(g, X + 2, Y - 3, '#ffd866', t, i * 0.5, 1.6, 0.5);
+        if (Math.random() < 0.15) FX.glintAt('target', p.x, p.y, 1);
       }
     }
   }
@@ -699,6 +686,6 @@
     for (const [i, j] of edges) R.line(g, verts[i].x, verts[i].y, verts[j].x, verts[j].y, '#4fe0c0');
     const pulse = (Math.sin(t * 2) + 1) / 2;
     R.disc(g, cx, cy, Math.round(3 + pulse * 3), pulse > 0.5 ? '#e8fff8' : '#4fe0c0');
-    if (Math.random() < 0.2) spawn(cx, cy, 2, { speed: 40, life: 1, colors: ['#4fe0c0', '#e8fff8'], view: 'target' });
+    if (Math.random() < 0.03) FX.ringAt('target', cx, cy, rad * 1.5, 1.4, 'teal', 0.9);
   }
 })(window.AT = window.AT || {});
