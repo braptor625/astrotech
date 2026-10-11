@@ -80,3 +80,11 @@ Decisions from the owner:
   - The bot finishes the prologue in about 10–14 min. Humans should take 15–25.
   - The main-game milestones only shift by the prologue's length.
 - A playtest bot pass (`tools/playtest.py`) must get through it like a new player.
+
+## Implementation notes (engine layer)
+
+- Data: `AT.PROLOGUE` in `src/data.js` (parts, staff, fire, rel, rd, tiers, contracts, grants, pitches, goals, carry, safety, story, lines). Logic: the "PROLOGUE" block of `src/engine.js` (`E.pro*`), state in `S.pro`, flag `S.prologueDone`, bonus `S.proBonus`.
+- While `E.proActive()` the tick only runs `E.proTick`; the mining actions (`buyShip`, `launch`, `hire`, ...) return false.
+- `E.newGame({ skipPrologue: true })` skips with the baseline carry-over. `E.proDevice(v)` is the device-level "already finished" flag (the UI persists it; the engine never touches storage). `E.proCanSkip()` is true on such a device.
+- Hook events (all through `AT.hooks.event(kind, payload)`): `proClick`, `proJobStart`, `proJobDone`, `proStaticFire`, `proAttemptStart`, `proAttemptResult`, `proTier`, `proPitch`, `proUnlock`, `certified`, `proSkip`. Payloads are documented at the top of the block in `engine.js`.
+- Tests: `node tools/prologue_test.js`. Balance bot: `node tools/sim.js <hours>` prints `[prologue]` milestones.

@@ -56,6 +56,7 @@
       story: {}, log: [], strike: false,
       stats: { missions: 0, launched: 0, losses: 0, deaths: 0, contracts: 0, incidents: 0, totalTime: 0, oreMined: 0, oreSold: 0, surveyed: 0 },
       ach: {}, ended: false, ngPlus: 0,
+      pro: null, prologueDone: true, proBonus: 0, // prologue: S.pro is its state; saves without it count as done
       tutorial: 0, tutBase: null, briefingsSeen: {},
       settings: { notation: 'short', sound: true, scanlines: true, buyAmt: 1, noConfirm: false, textSize: 'large', gfx: 'high', highContrast: false, showBriefings: true,
         reduceMotion: typeof matchMedia === 'function' && !!matchMedia('(prefers-reduced-motion: reduce)').matches },
@@ -77,6 +78,13 @@
     merged.staff = Object.assign(E.newState().staff, s.staff || {});
     merged.run = Object.assign(freshRun(), s.run || {});
     merged.autobuy = Object.assign(E.newState().autobuy, s.autobuy || {});
+    // prologue: saves from before it exist (no S.pro / prologueDone) count as done
+    if (s.pro && typeof s.pro === 'object' && s.prologueDone === false) {
+      const f = freshPro();
+      merged.pro = Object.assign(f, s.pro);
+      for (const k of ['parts', 'made', 'staff', 'learn', 'stats', 'unlocked']) merged.pro[k] = Object.assign(f[k], s.pro[k] || {});
+      merged.prologueDone = false;
+    } else { merged.prologueDone = true; if (!s.pro) merged.pro = null; }
     merged.layers = AT.LAYERS.map((l, i) => Object.assign(E.newState().layers[i], (s.layers || [])[i] || {}));
     // saves from before the tutorial and field manual: the tutorial counts as done, and the UI marks every
     // briefing that is already unlocked as seen (briefingsSeen === null means "sweep on load")
@@ -101,7 +109,7 @@
     const S = E.S;
     if (S.story[key]) return;
     S.story[key] = 1;
-    E.log(AT.STORY[key], 'story');
+    E.log(AT.STORY[key] || AT.PROLOGUE.story[key], 'story');
   };
   E.unlockAch = function (id) {
     const S = E.S;
@@ -370,7 +378,7 @@
     const pilot = ship.pilot ? E.pilotById(ship.pilot) : null;
     const trait = pilot ? pilot.trait : null;
     let speed = h.speed * Math.pow(mod('engine'), lv('engine')) * M.speed * (trait === 'daredevil' ? 1.2 : 1);
-    let cargo = h.cargo * Math.pow(mod('cargo'), lv('cargo')) * M.cargo * (trait === 'greedy' ? 1.18 : 1);
+    let cargo = h.cargo * Math.pow(mod('cargo'), lv('cargo')) * M.cargo * (trait === 'greedy' ? 1.18 : 1) * (h.id === 'prospector' ? 1 + (S.proBonus || 0) : 1);
     const drill = h.drill * Math.pow(mod('drill'), lv('drill')) * M.drill;
     const left = E.targetLeft(t, M) - (t._reserved || 0);
     const exp = t.story ? EXP[t.story] : null;
@@ -391,6 +399,7 @@
     risk *= Math.pow(mod('plating'), lv('plating'));
     risk *= 1 + 2 * (1 - ship.cond);
     risk *= M.risk;
+    if (h.id === 'prospector') risk *= 1 - (S.proBonus || 0);
     risk = clamp(risk, 0.01, 0.97);
     // displayed risk for unsurveyed targets uses the estimate
     let shownRisk = risk;
@@ -1355,10 +1364,17 @@
     checkExpeditions();
     E.touch();
   }
-  E.newGame = function () {
+  // opts.skipPrologue: start the main game right away with the baseline carry-over (the UI passes this when the device flag is set and the player chose to skip)
+  E.newGame = function (opts) {
     E.S = E.newState();
     E.resetRun(0, E.mults());
-    E.say('start');
+    const S = E.S;
+    S.pro = freshPro(); S.prologueDone = false;
+    S.pro.pilot = (S.pilots.find((p) => p.founder) || {}).name || null;
+    S.tutorial = 'pro'; // not a number: the mining tutorial waits until the license is granted (or the prologue is skipped)
+    S.money = PRO.loan;
+    if (opts && opts.skipPrologue) { S.money = 0; E.proSkip(); E.say('start'); return; }
+    proSay('pro_start');
   };
   E.canEnd = function () { return E.S.region >= 4 && E.S.peakEquity >= AT.FINAL_REQ && !E.S.ended; };
   E.end = function () {
@@ -1375,6 +1391,7 @@
     S.ngPlus = (old.ngPlus || 0) + 1;
     for (const k of ['ach', 'settings', 'stats', 'artifacts', 'memorial', 'dirIdx', 'briefingsSeen']) S[k] = old[k];
     S.dirIdx = 0; S.tutorial = 'done'; S.tutBase = null;
+    S.pro = null; S.prologueDone = true; S.proBonus = old.proBonus || 0;
     E.resetRun(0, E.mults());
     E.unlockAch('ACH_NGPLUS');
     E.say('start');
@@ -1513,6 +1530,553 @@
   }
 
   // =====================================================================
+  // PROLOGUE ("Proof of Concept"): hand-built parts -> timed jobs -> tests -> launch tiers -> certification.
+  // State lives in S.pro; S.prologueDone ends it. While it runs, E.tick only runs proTick (the mining systems are inert).
+  //
+  // Hook events (AT.hooks.event(kind, payload)):
+  //   proClick        {mode:'hand'|'job', type?, job?}      a click landed
+  //   proJobStart     job {id, kind:'fab'|'fire'|'assemble', type?, tier?, t, T}
+  //   proJobDone      job + {hand?:true}                    a part/rocket was finished (fab, assemble, or a hand-machined part)
+  //   proStaticFire   {ok, boom, data, job}                 static fire result (boom = engine destroyed)
+  //   proAttemptStart attempt {id, tier, t, T, ok, failAt, p, cause, contract}
+  //   proAttemptResult {ok, explosion, tier, at, cause, data, cash, attempt}   explosion: true on failure
+  //   proTier         {tier, first}                         a tier was cleared (also fires proAttemptResult first)
+  //   proPitch        card                                  an investor card was queued in S.pro.cards
+  //   proUnlock       name                                  a console unlocked: 'stand' | 'rd' | 'launch' | 'funding'
+  //   certified       summary                               the license was granted; carry-over done. summary.device = true: persist the device flag
+  //   proSkip         summary                               the prologue was skipped (baseline carry-over done)
+  // Also E.log (kind 'story') for every log line, E.say keys in AT.PROLOGUE.story, E.unlockAch for ACH_PRO_*.
+  // =====================================================================
+  const PRO = AT.PROLOGUE;
+  const TIERS = PRO.tiers, TIER = Object.fromEntries(TIERS.map((t) => [t.id, t]));
+  const RDN = Object.fromEntries(PRO.rd.map((r) => [r.id, r]));
+  const SUBS = PRO.partOrder;
+  let deviceProDone = false;
+  E.rng = null; // tests may set E.rng = () => 0.5 to force outcomes
+  const proRoll = () => (E.rng ? E.rng() : Math.random());
+
+  function freshPro() {
+    return {
+      t: 0, data: 0, dataTotal: 0,
+      parts: { airframe: 0, engine: 0, avionics: 0 }, made: { airframe: 0, engine: 0, avionics: 0 },
+      hand: null,                       // {type, p} hand-machined part in progress (p 0..1)
+      jobs: [],                         // {id, kind, type, tier, t, T}
+      staff: { machinist: 0, tester: 0 },
+      learn: { airframe: 0, engine: 0, avionics: 0 },
+      rd: {}, rocket: null,             // rocket: {tier} an assembled vehicle (tier = index)
+      attempt: null,
+      cleared: {},                      // tier id -> successful attempts
+      contracts: {}, grants: {},        // id -> 'accepted'|'done' / true
+      cards: [], pitchSeen: {}, pressure: 0, ore: 0,
+      auto: true, fireAuto: true, stock: null,          // stock: manual part targets {airframe,engine,avionics} or null = what the next tier needs
+      stats: { clicks: 0, fires: 0, boomFires: 0, attempts: 0, fails: 0, loans: 0, handParts: 0 },
+      unlocked: { stand: false, rd: false, launch: false, funding: false },
+      name: null, pilot: null,
+      certified: false, skipped: false, cert: null,
+    };
+  }
+  E.proFresh = freshPro;
+  E.proActive = function () { const S = E.S; return !!(S && S.pro && !S.prologueDone); };
+  // device-level "prologue already completed on this machine" flag. The UI reads/writes localStorage and the Steam bridge.
+  E.proDevice = function (v) { if (v !== undefined) deviceProDone = !!v; return deviceProDone; };
+  E.proCanSkip = function () { return E.proActive() && (deviceProDone || !!E.S.ach.ACH_PRO_RETURNED); };
+
+  const proSay = (key) => E.say(key);
+  const tierIdx = (t) => (typeof t === 'number' ? t : TIERS.findIndex((x) => x.id === t));
+  E.proTier = function (t) { return TIERS[tierIdx(t)] || null; };
+  // R&D effects, summed.
+  E.proFx = function () {
+    const P = E.S.pro, fx = { rel: { airframe: 0, engine: 0, avionics: 0 }, bays: PRO.bays, fabMult: 1, asmMult: 1, dataMult: 1, learnMult: 1, attemptLearnMult: 1, legs: false, tester: false };
+    if (!P) return fx;
+    for (const r of PRO.rd) {
+      if (!P.rd[r.id]) continue;
+      for (const k in r.fx) {
+        const v = r.fx[k];
+        if (k === 'rel') for (const s in v) fx.rel[s] += v[s];
+        else if (k === 'bays') fx.bays += v;
+        else if (k === 'legs' || k === 'tester') fx[k] = true;
+        else fx[k] *= v;
+      }
+    }
+    return fx;
+  };
+  E.proRel = function (sub) {
+    const P = E.S.pro, fx = E.proFx();
+    return clamp(PRO.rel.base[sub] + Math.min(PRO.rel.learnCap, P.learn[sub]) + fx.rel[sub], 0, PRO.rel.max);
+  };
+  E.proRelAvg = function () { return SUBS.reduce((a, s) => a + E.proRel(s), 0) / SUBS.length; };
+  // Success odds of a tier at the current reliability: diff * prod(rel_s ^ sqrt(count_s)) * pressure
+  E.proOdds = function (tier) {
+    const T = E.proTier(tier), P = E.S.pro;
+    let p = T.diff;
+    for (const s of SUBS) p *= Math.pow(E.proRel(s), Math.sqrt(T.parts[s] || 0));
+    p *= Math.pow(PRO.pressureMult, P.pressure);
+    return clamp(p, 0.02, 0.99);
+  };
+  E.proFireKill = function () { return PRO.fire.killK * (1 - E.proRel('engine')); };
+  E.proFreeBays = function () { const P = E.S.pro; return E.proFx().bays - P.jobs.length; };
+  E.proJobTime = function (kind, type, tier) {
+    const fx = E.proFx();
+    if (kind === 'fab') return PRO.parts[type].fabT * fx.fabMult;
+    if (kind === 'fire') return PRO.fire.T;
+    return TIERS[tierIdx(tier)].assembleT * fx.asmMult;
+  };
+  E.proStaffCost = function (role) { return PRO.staff[role].cost; };
+  E.proSalary = function () { const P = E.S.pro; return P ? Object.keys(PRO.staff).reduce((a, r) => a + P.staff[r] * PRO.staff[r].salary, 0) : 0; };
+  E.proMade = function () { const m = E.S.pro.made; return m.airframe + m.engine + m.avionics; };
+  // Highest tier index the player may work on: 0 until a tier is cleared, then the next one.
+  E.proTierUnlocked = function (t) {
+    const i = tierIdx(t), P = E.S.pro, T = TIERS[i];
+    if (!T) return false;
+    if (i > 0 && !P.cleared[TIERS[i - 1].id]) return false;
+    return true;
+  };
+  E.proTierBlock = function (t) {
+    const T = E.proTier(t), P = E.S.pro;
+    if (!E.proTierUnlocked(t)) return 'Clear ' + TIERS[tierIdx(t) - 1].name + ' first';
+    if (T.needs && !P.rd[T.needs]) return 'Needs ' + RDN[T.needs].name;
+    return null;
+  };
+  // the tier the player is working toward (first uncleared)
+  E.proNextTier = function () { const P = E.S.pro; return TIERS.findIndex((t) => !P.cleared[t.id]) < 0 ? TIERS.length - 1 : TIERS.findIndex((t) => !P.cleared[t.id]); };
+  function inFire() { return E.S.pro.jobs.filter((j) => j.kind === 'fire').length; }
+  // part targets the machinist keeps in stock
+  E.proStock = function () {
+    const P = E.S.pro;
+    if (P.stock) return P.stock;
+    const need = Object.assign({}, TIERS[E.proNextTier()].parts);
+    if (P.rocket) for (const s of SUBS) need[s] = Math.max(0, need[s] - (TIERS[P.rocket.tier].parts[s] || 0));
+    return need;
+  };
+  E.proHave = function (s) { const P = E.S.pro; return P.parts[s] + P.jobs.filter((j) => j.kind === 'fire').length * (s === 'engine' ? 1 : 0); };
+  E.proPending = function (s) { return E.S.pro.jobs.filter((j) => j.kind === 'fab' && j.type === s).length; };
+  E.proNextType = function () {
+    const st = E.proStock();
+    let best = null, bd = 0;
+    for (const s of ['engine', 'airframe', 'avionics']) { const d = st[s] - E.proHave(s) - E.proPending(s) - (E.S.pro.hand && !E.S.pro.staff.machinist && E.S.pro.hand.type === s ? 1 : 0); if (d > bd) { bd = d; best = s; } }
+    return best;
+  };
+  E.proSetStock = function (s, n) { const P = E.S.pro; if (!P || !SUBS.includes(s)) return false; P.stock = Object.assign({}, E.proStock()); P.stock[s] = Math.max(0, Math.min(6, n | 0)); return true; };
+  E.proClearStock = function () { E.S.pro.stock = null; };
+  E.proSetAuto = function (on) { E.S.pro.auto = !!on; };
+  // the Test Engineer's unattended static fires (turn off while you want the engine for an assembly)
+  E.proSetFireAuto = function (on) { E.S.pro.fireAuto = !!on; };
+
+  function startJob(kind, extra) {
+    const P = E.S.pro;
+    const job = Object.assign({ id: E.uid(), kind, t: 0 }, extra);
+    job.T = E.proJobTime(kind, job.type, job.tier);
+    P.jobs.push(job);
+    AT.hooks.event('proJobStart', job);
+    return job;
+  }
+  // ---- hand machining & click-speed
+  E.proClick = function (type) {
+    const S = E.S, P = S.pro;
+    if (!E.proActive()) return false;
+    P.stats.clicks++;
+    proSay('pro_click');
+    // 1) a running fab job for this part is sped up (unless a part is half-machined on the lathe and no type was given)
+    const fab = P.jobs.find((j) => j.kind === 'fab' && (type ? j.type === type : !P.hand));
+    if (fab) {
+      fab.t = Math.min(fab.T, fab.t + PRO.click.boost);
+      AT.hooks.event('proClick', { mode: 'job', job: fab });
+      return 'job';
+    }
+    // 2) otherwise hand-machine the next part
+    type = type || (P.hand && P.hand.type) || E.proNextType();
+    if (!type) {
+      const any = P.jobs[0];
+      if (!any) return false;
+      any.t = Math.min(any.T, any.t + PRO.click.boost);
+      AT.hooks.event('proClick', { mode: 'job', job: any });
+      return 'job';
+    }
+    if (P.hand && P.hand.type !== type) return false; // finish the part on the lathe first
+    const def = PRO.parts[type];
+    if (!P.hand) {
+      if (S.money < def.cost) return false;
+      S.money -= def.cost;
+      P.hand = { type, p: 0 };
+    }
+    P.hand.p += 1 / Math.max(1, Math.round(def.clicks * (E.proFx().fabMult < 1 ? 0.85 : 1)));
+    AT.hooks.event('proClick', { mode: 'hand', type, p: P.hand.p });
+    if (P.hand.p >= 0.999) {
+      P.hand = null;
+      P.parts[type]++; P.made[type]++; P.stats.handParts++;
+      afterPart(type, true);
+    }
+    return 'hand';
+  };
+  function afterPart(type, hand) {
+    const P = E.S.pro;
+    if (E.proMade() === 1) proSay('pro_part1');
+    if (hand) E.unlockAch('ACH_PRO_PART');
+    if (!P.unlocked.stand && P.made.engine >= 1) unlock('stand');
+    if (SUBS.every((s) => P.made[s] >= 1)) proSay('pro_madeall');
+  }
+  function unlock(name) {
+    const P = E.S.pro;
+    if (P.unlocked[name]) return;
+    P.unlocked[name] = true;
+    if (name === 'stand') proSay('pro_stand');
+    if (name === 'funding') proSay('pro_board');
+    AT.hooks.event('proUnlock', name);
+  }
+  // ---- jobs
+  E.proFabBlock = function (type) {
+    const S = E.S, P = S.pro;
+    if (!E.proActive() || !PRO.parts[type]) return 'Not available';
+    if (!P.staff.machinist) return 'Hire a machinist';
+    if (E.proFreeBays() <= 0) return 'All bays busy';
+    if (S.money < PRO.parts[type].cost) return 'Not enough cash';
+    return null;
+  };
+  E.proFab = function (type) {
+    if (E.proFabBlock(type)) return false;
+    E.S.money -= PRO.parts[type].cost;
+    return startJob('fab', { type });
+  };
+  E.proFireBlock = function () {
+    const S = E.S, P = S.pro;
+    if (!E.proActive()) return 'Not available';
+    if (P.parts.engine < 1) return 'Needs an engine';
+    if (E.proFreeBays() <= 0) return 'All bays busy';
+    if (S.money < PRO.fire.cost) return 'Not enough cash';
+    return null;
+  };
+  E.proStaticFire = function () {
+    if (E.proFireBlock()) return false;
+    const P = E.S.pro;
+    E.S.money -= PRO.fire.cost;
+    P.parts.engine--;
+    return startJob('fire', {});
+  };
+  E.proAssembleBlock = function (t) {
+    const S = E.S, P = S.pro, T = E.proTier(t);
+    if (!E.proActive() || !T) return 'Not available';
+    const tb = E.proTierBlock(t);
+    if (tb) return tb;
+    if (P.rocket || P.jobs.some((j) => j.kind === 'assemble')) return 'A rocket is already on the pad';
+    if (P.attempt) return 'Launch in progress';
+    for (const s of SUBS) if (P.parts[s] < (T.parts[s] || 0)) return `Needs ${T.parts[s]} ${PRO.parts[s].name.toLowerCase()}`;
+    if (E.proFreeBays() <= 0) return 'All bays busy';
+    return null;
+  };
+  E.proAssemble = function (t) {
+    if (E.proAssembleBlock(t)) return false;
+    const P = E.S.pro, T = E.proTier(t);
+    for (const s of SUBS) P.parts[s] -= T.parts[s] || 0;
+    if (!P.unlocked.launch) unlock('launch');
+    return startJob('assemble', { tier: tierIdx(t) });
+  };
+  function finishJob(job) {
+    const S = E.S, P = S.pro;
+    P.jobs = P.jobs.filter((j) => j !== job);
+    if (job.kind === 'fab') {
+      P.parts[job.type]++; P.made[job.type]++;
+      afterPart(job.type, false);
+      AT.hooks.event('proJobDone', job);
+    } else if (job.kind === 'assemble') {
+      P.rocket = { tier: job.tier };
+      proSay('pro_asm1');
+      AT.hooks.event('proJobDone', job);
+    } else if (job.kind === 'fire') {
+      const F = PRO.fire, fx = E.proFx();
+      P.stats.fires++;
+      const boom = proRoll() < E.proFireKill();
+      let data;
+      if (boom) {
+        data = F.dataBoom * fx.dataMult; P.stats.boomFires++;
+        P.learn.engine += F.learnBoom * fx.learnMult;
+        E.log(pick(PRO.lines.fireBoom), 'story');
+        proSay('pro_boomfire'); E.unlockAch('ACH_PRO_RUD');
+      } else {
+        data = F.data * fx.dataMult;
+        P.parts.engine++;
+        P.learn.engine += F.learn * fx.learnMult;
+        if (P.stats.fires === 1) proSay('pro_fire1'); else if (P.stats.fires % 3 === 0) E.log(pick(PRO.lines.fireOk), 'story');
+      }
+      P.learn.engine = Math.min(P.learn.engine, PRO.rel.learnCap + 0.001);
+      addData(data);
+      if (P.stats.fires === 1) { E.unlockAch('ACH_PRO_FIRE'); proSay('pro_data'); if (!P.unlocked.rd) { unlock('rd'); proSay('pro_rd'); } }
+      if (P.stats.fires === 5) proSay('pro_fire5');
+      AT.hooks.event('proJobDone', job);
+      AT.hooks.event('proStaticFire', { ok: !boom, boom, data, job });
+    }
+    E.touch();
+  }
+  function addData(n) {
+    const P = E.S.pro;
+    P.data += n; P.dataTotal += n;
+    if (P.dataTotal >= 50) proSay('pro_data50');
+    if (P.dataTotal >= 100) { proSay('pro_data100'); E.unlockAch('ACH_PRO_DATA'); }
+  }
+  // ---- staff / R&D
+  E.proHireBlock = function (role) {
+    const S = E.S, P = S.pro, d = PRO.staff[role];
+    if (!E.proActive() || !d) return 'Not available';
+    if (P.staff[role] >= 1) return 'Already hired';
+    if (d.unlock === 'part' ? E.proMade() < 1 : !P.rd[d.unlock]) return 'Locked';
+    if (S.money < d.cost) return 'Not enough cash';
+    return null;
+  };
+  E.proHire = function (role) {
+    if (E.proHireBlock(role)) return false;
+    const S = E.S, P = S.pro;
+    S.money -= PRO.staff[role].cost; P.staff[role] = 1;
+    if (role === 'machinist') { proSay('pro_machinist'); proSay('pro_auto'); }
+    if (role === 'tester') proSay('pro_tester');
+    E.touch();
+    return true;
+  };
+  E.proRdAvailable = function (id) { const P = E.S.pro, r = RDN[id]; return !!r && !P.rd[id] && r.req.every((q) => P.rd[q]); };
+  E.proBuyRD = function (id) {
+    const P = E.S.pro, r = RDN[id];
+    if (!E.proActive() || !E.proRdAvailable(id) || P.data < r.cost) return false;
+    P.data -= r.cost; P.rd[id] = 1;
+    E.log(`R&D complete: ${r.name}. ${r.desc}`, 'up');
+    if (id === 'r_bay') proSay('pro_bay2');
+    if (id === 'r_legs') proSay('pro_legs');
+    E.touch();
+    return true;
+  };
+  // ---- contracts, grants, pitches
+  E.proContractOffered = function (c) { const P = E.S.pro; return !P.contracts[c.id] && (c.tier === 0 ? P.unlocked.launch : !!P.cleared[TIERS[c.tier - 1].id]); };
+  E.proAcceptContract = function (id) {
+    const P = E.S.pro, c = PRO.contracts.find((x) => x.id === id);
+    if (!E.proActive() || !c || !E.proContractOffered(c)) return false;
+    if (PRO.contracts.some((x) => x.tier === c.tier && P.contracts[x.id] === 'accepted')) return false;
+    P.contracts[id] = 'accepted';
+    proSay('pro_contract');
+    return true;
+  };
+  E.proGrantReady = function (g) {
+    const P = E.S.pro;
+    if (P.grants[g.id]) return false;
+    return g.cond[0] === 'tier' ? !!P.cleared[g.cond[1]] : P.dataTotal >= g.cond[1];
+  };
+  E.proClaimGrant = function (id) {
+    const S = E.S, P = S.pro, g = PRO.grants.find((x) => x.id === id);
+    if (!E.proActive() || !g || !E.proGrantReady(g)) return false;
+    P.grants[id] = 1; S.money += g.cash;
+    proSay('pro_grant');
+    E.log(`GRANT: ${g.name}, +$${AT.fmt(g.cash)}.`, 'up');
+    return true;
+  };
+  function queuePitches(tierId) {
+    const P = E.S.pro;
+    for (const c of PRO.pitches) {
+      if (c.after !== tierId || P.pitchSeen[c.id]) continue;
+      P.pitchSeen[c.id] = 1;
+      const card = { type: 'pitch', id: c.id };
+      P.cards.push(card);
+      proSay('pro_pitch');
+      AT.hooks.card(card); AT.hooks.event('proPitch', card);
+    }
+  }
+  E.proResolvePitch = function (idx, choice) {
+    const S = E.S, P = S.pro, card = P.cards[idx];
+    if (!card) return false;
+    const c = PRO.pitches.find((x) => x.id === card.id), opt = c && c[choice];
+    if (!opt) return false;
+    P.cards.splice(idx, 1);
+    const fx = opt.fx;
+    if (fx.cash) S.money += fx.cash;
+    if (fx.data) addData(fx.data);
+    if (fx.pressure) { P.pressure += fx.pressure; proSay('pro_pressure'); }
+    if (fx.ore) { P.ore += fx.ore; proSay('pro_ore'); }
+    if (fx.learn) for (const s of SUBS) P.learn[s] = Math.min(PRO.rel.learnCap, P.learn[s] + fx.learn);
+    E.log(opt.log, 'story');
+    return true;
+  };
+  // ---- launch attempts
+  E.proAttemptBlock = function (t) {
+    const S = E.S, P = S.pro, T = E.proTier(t);
+    if (!E.proActive() || !T) return 'Not available';
+    if (P.attempt) return 'Launch in progress';
+    if (!P.rocket || P.rocket.tier !== tierIdx(t)) return P.rocket ? `The assembled rocket is for ${TIERS[P.rocket.tier].name}` : 'Assemble a rocket first';
+    if (S.money < T.fee) return 'Not enough cash for the launch fee';
+    return null;
+  };
+  E.proAttempt = function (t) {
+    if (E.proAttemptBlock(t)) return false;
+    const S = E.S, P = S.pro, T = E.proTier(t), idx = tierIdx(t);
+    S.money -= T.fee;
+    const p = E.proOdds(idx), ok = proRoll() < p;
+    // the weakest link takes the blame
+    let cause = null;
+    if (!ok) {
+      const w = SUBS.map((s) => (1 - E.proRel(s)) * Math.sqrt(T.parts[s] || 0)), tot = w.reduce((a, b) => a + b, 0);
+      let r = proRoll() * tot; cause = SUBS[SUBS.length - 1];
+      for (let i = 0; i < SUBS.length; i++) { r -= w[i]; if (r <= 0) { cause = SUBS[i]; break; } }
+    }
+    const contract = PRO.contracts.find((c) => c.tier === idx && P.contracts[c.id] === 'accepted');
+    P.attempt = { id: E.uid(), tier: idx, t: 0, T: T.flightT, ok, p, failAt: ok ? 1 : 0.35 + proRoll() * 0.55, cause, contract: contract ? contract.id : null };
+    P.stats.attempts++;
+    if (idx === 0 && !P.cleared.hop) proSay('pro_hop_go');
+    if (idx === 3) proSay('pro_recover');
+    AT.hooks.event('proAttemptStart', P.attempt);
+    E.touch();
+    return P.attempt;
+  };
+  function finishAttempt() {
+    const S = E.S, P = S.pro, a = P.attempt, T = TIERS[a.tier], fx = E.proFx();
+    P.attempt = null;
+    const used = SUBS.filter((s) => T.parts[s]);
+    const res = { ok: a.ok, explosion: !a.ok, tier: T.id, at: a.ok ? 1 : a.failAt, cause: a.cause, data: 0, cash: 0, attempt: a };
+    if (a.ok) {
+      for (const s of used) P.learn[s] = Math.min(PRO.rel.learnCap, P.learn[s] + PRO.attemptLearn.ok * fx.attemptLearnMult);
+      res.data = T.data * fx.dataMult; res.cash = T.reward.cash;
+      if (a.contract) { const c = PRO.contracts.find((x) => x.id === a.contract); P.contracts[c.id] = 'done'; res.cash += c.reward; E.log(`CONTRACT: ${c.client} paid $${AT.fmt(c.reward)} for ${c.name.toLowerCase()}.`, 'up'); }
+      S.money += res.cash; addData(res.data);
+      const first = !P.cleared[T.id];
+      P.cleared[T.id] = (P.cleared[T.id] || 0) + 1;
+      if (T.recover) for (const s of used) P.parts[s] += T.parts[s];
+      if (first) {
+        if (T.id === 'hop') proSay('pro_hop_ok'); else if (T.id === 'sub') proSay('pro_sub_ok'); else if (T.id === 'orbit') proSay('pro_orbit_ok');
+        E.log(`MILESTONE: ${T.name} complete. +$${AT.fmt(res.cash)}, +${AT.fmt(res.data)} Data.`, 'up');
+        E.unlockAch(T.ach);
+        if (!P.unlocked.funding) unlock('funding');
+        if (T.id !== 'recover') queuePitches(T.id);
+      }
+      AT.hooks.event('proAttemptResult', res);
+      if (first) AT.hooks.event('proTier', { tier: T.id, first: true });
+      if (T.id === 'recover') { certify(false); return; }
+    } else {
+      P.stats.fails++;
+      for (const s of used) P.learn[s] = Math.min(PRO.rel.learnCap, P.learn[s] + PRO.attemptLearn.fail * fx.attemptLearnMult);
+      res.data = T.failData * fx.dataMult;
+      addData(res.data);
+      proSay(P.stats.fails === 1 ? 'pro_fail1' : P.stats.fails === 2 ? 'pro_fail2' : 'pro_fail1');
+      E.log(pick(PRO.lines.fail[a.cause]), 'story');
+      E.log(`${T.name} attempt lost. The rocket is gone. +${AT.fmt(res.data)} Data.`, 'down');
+      E.unlockAch('ACH_PRO_RUD');
+      AT.hooks.event('proAttemptResult', res);
+    }
+    // the rocket is spent either way (a recovering success returned its parts above)
+    P.rocket = null;
+    E.touch();
+  }
+  // ---- certification & carry-over
+  E.proGoal = function () {
+    const P = E.S.pro;
+    if (!P) return null;
+    for (const g of PRO.goals) {
+      const [t, v] = g.cond;
+      const done = t === 'made' ? E.proMade() >= v : t === 'madeAll' ? SUBS.every((s) => P.made[s] >= v) : t === 'fires' ? P.stats.fires >= v : t === 'tier' ? !!P.cleared[v] : false;
+      if (!done) return g;
+    }
+    return null;
+  };
+  // which consoles to show: workshop always; the rest as they unlock
+  E.proUnlocked = function (name) { const P = E.S.pro; return name === 'workshop' ? true : !!(P && P.unlocked[name]); };
+  function applyCarryOver(rel, data, ore, cashLeft, skipped) {
+    const S = E.S, C = PRO.carry;
+    const bonus = clamp((rel - C.bonusRef) * C.bonusK, 0, C.bonusMax);
+    const rp = Math.min(C.rpCap, data * C.rpPerData + ore * C.rpPerOre);
+    S.proBonus = bonus;
+    S.rp += rp;
+    S.money = C.cash + Math.min(C.cashCap, Math.max(0, cashLeft) * C.cashShare);
+    // the rocket becomes the first Prospector, flown by the founding pilot
+    const ship = addShip('prospector', 0);
+    const P = S.pro;
+    ship.name = P.name || C.rocketName;
+    ship.proof = true;
+    const pilot = S.pilots.find((p) => p.founder);
+    if (pilot) { P.pilot = pilot.name; pilot.ship = null; if (!ship.pilot) { ship.pilot = pilot.id; pilot.ship = ship.id; } }
+    S.dirIdx = 0; S.tutorial = 0; S.tutBase = null;
+    S.runT = 0; for (const L of S.layers) L.t = 0; // the mining run's clocks start at the license
+    S.run.pilotsHired = 0;
+    S.cards = S.cards.filter((c) => c.type !== 'pitch');
+    S.prologueDone = true;
+    S.pro.cards = []; S.pro.jobs = []; S.pro.attempt = null;
+    E.touch();
+    return { bonus, rp, name: ship.name, shipId: ship.id, pilot: P.pilot, cash: S.money };
+  }
+  function certify() {
+    const S = E.S, P = S.pro;
+    const rel = {}; for (const s of SUBS) rel[s] = E.proRel(s);
+    const relAvg = E.proRelAvg(), dataLeft = P.data, time = P.t, ore = P.ore, cashLeft = S.money;
+    P.certified = true;
+    const co = applyCarryOver(relAvg, dataLeft, ore, cashLeft, false);
+    P.data = 0;
+    P.cert = Object.assign({ time, rel, relAvg, dataLeft, ore, cashLeft, attempts: P.stats.attempts, fails: P.stats.fails, device: true }, co);
+    deviceProDone = true;
+    proSay('pro_license');
+    E.log(`CERTIFIED: the ${co.name} is now your first Prospector. +${AT.fmt(co.rp)} RP carried over, Prospector risk -${Math.round(co.bonus * 100)}%.`, 'up');
+    E.unlockAch('ACH_PRO_RETURNED');
+    if (P.stats.fails === 0) E.unlockAch('ACH_PRO_CLEAN');
+    if (time < 900) E.unlockAch('ACH_PRO_FAST');
+    AT.hooks.event('certified', P.cert);
+  }
+  // rename the certified Prospector (UI: after the license beat)
+  E.proRename = function (name) {
+    const S = E.S, P = S.pro;
+    name = String(name || '').replace(/[<>&]/g, '').trim().slice(0, 28);
+    if (!P || !P.certified || !name) return false;
+    const ship = S.ships.find((s) => s.proof);
+    P.name = name; if (ship) ship.name = name;
+    if (P.cert) P.cert.name = name;
+    return true;
+  };
+  E.proSkip = function () {
+    const S = E.S;
+    if (!E.proActive()) return false;
+    const P = S.pro, K = PRO.carry.skip;
+    P.skipped = true;
+    proSay('pro_skip');
+    const co = applyCarryOver(K.rel, K.data, K.ore, 0, true);
+    P.cert = Object.assign({ skipped: true, relAvg: K.rel, dataLeft: K.data }, co);
+    AT.hooks.event('proSkip', P.cert);
+    return true;
+  };
+
+  // ---- the tick
+  function proTick(dt) {
+    const S = E.S, P = S.pro;
+    P.t += dt;
+    // payroll: unpaid staff just stop being paid (no strikes in the garage)
+    const sal = E.proSalary() * dt;
+    if (sal > 0) S.money = Math.max(0, S.money - sal);
+    // jobs
+    for (const job of P.jobs.slice()) { job.t += dt; if (job.t >= job.T) finishJob(job); }
+    // attempt
+    const a = P.attempt;
+    if (a) {
+      a.t += dt;
+      if (a.ok ? a.t >= a.T : a.t >= a.failAt * a.T) finishAttempt();
+    }
+    if (!E.proActive()) return;
+    // automation
+    if (P.auto) {
+      const fx = E.proFx();
+      if (P.staff.machinist) {
+        let g = 0;
+        while (E.proFreeBays() > 0 && g++ < 4) {
+          const type = E.proNextType();
+          if (!type || S.money < PRO.parts[type].cost) break;
+          E.proFab(type);
+        }
+      }
+      if (P.staff.tester && fx.tester && P.fireAuto && E.proFreeBays() > 0 && inFire() === 0 && P.parts.engine > 0 && S.money >= PRO.fire.cost + 150) E.proStaticFire();
+    }
+    // stuck without cash: the bank rescues the company (a few times)
+    if (S.money < PRO.safety.below && !P.attempt && P.stats.loans < PRO.safety.max) {
+      const cheapest = Math.min(...SUBS.map((s) => PRO.parts[s].cost));
+      const canMove = P.rocket ? S.money >= TIERS[P.rocket.tier].fee : (S.money >= cheapest || SUBS.every((s) => P.parts[s] >= (TIERS[E.proNextTier()].parts[s] || 0)));
+      if (!canMove) { S.money += PRO.safety.loan; P.stats.loans++; proSay('pro_broke'); }
+    }
+  }
+  E.proTick = proTick;
+
+  // While the prologue runs the mining game is closed: these return false so a stray click cannot break it.
+  for (const name of ['buyShip', 'launch', 'hire', 'hirePilot', 'buyPad', 'buyObs', 'buyProbe', 'survey', 'buyModule', 'buyResearch', 'buyProject', 'buildOutpost', 'sell', 'sellAll', 'deliverContract', 'prestige']) {
+    const fn = E[name];
+    E[name] = function () { return E.proActive() ? false : fn.apply(E, arguments); };
+  }
+
+  // =====================================================================
   // TICK
   // =====================================================================
   const acc = { hist: 0, sec: 0, auto: 0 };
@@ -1521,6 +2085,7 @@
     if (!(dt > 0)) return;
     S.time += dt; S.runT += dt; S.stats.totalTime += dt;
     for (const L of S.layers) L.t += dt;
+    if (S.pro && !S.prologueDone) { proTick(dt); return; } // the prologue: nothing of the mining game runs
     let M = E.mults();
     S._earnTick = 0;
 
