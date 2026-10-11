@@ -621,21 +621,27 @@
   // ----------------------------- PROJECTS -----------------------------
   PANELS.projects = {
     vis(S) { return AT.PROJECTS.filter((p) => E.projectVisible(p)); },
-    sig(S) { return this.vis(S).map((p) => p.id).join() + '|' + Object.keys(S.projects).length; },
+    sig(S) { return this.vis(S).map((p) => p.id + (S.money >= p.cost ? '+' : '-')).join() + '|' + Object.keys(S.projects).length; },
     build(S) {
-      const vis = this.vis(S);
-      let h = conHead('Projects', 'One-time company initiatives. New ones appear as AstroTech grows.', '<span class="tog" data-k="pdone"></span>');
-      if (!vis.length) h += '<div class="slot teaser">NO PROJECTS PENDING. KEEP GROWING.</div>';
-      h += '<div class="cards">';
-      for (const p of vis) h += `<div class="card slot" data-tip="proj:${p.id}"><h4>${p.name}</h4><p>${p.desc}</p>${btn('proj', p.id, 'gold', 'pr_' + p.id)}</div>`;
-      h += '</div>';
+      const co = S.settings.collapsed = S.settings.collapsed || {};
+      if (co['projects:done'] === undefined) co['projects:done'] = true; // Completed starts collapsed
+      const can = (p) => S.money >= p.cost;
+      const vis = this.vis(S).slice().sort((a, b) => (can(b) - can(a)) || (a.cost - b.cost)); // affordable first, then cheapest
       const done = AT.PROJECTS.filter((p) => S.projects[p.id]);
-      if (done.length) h += `<h3 class="section-h">COMPLETED</h3><div class="note">${done.map((p) => p.name).join(' · ')}</div>`;
+      let h = conHead('Projects', 'One-time company initiatives, paid in cash. Some carry side effects.', '');
+      const rows = vis.map((p) => `<div class="row prow" data-tip="proj:${p.id}" style="--cols:minmax(0,1fr) auto auto"><span class="pname"><b>${p.name}</b><small>${p.desc}</small></span><span class="num pcost ${can(p) ? 'can' : ''}">${money(p.cost)}</span>${btn('proj', p.id, 'gold tiny', 'pr_' + p.id)}</div>`).join('');
+      h += sect('projects:avail', 'Available', { count: vis.length }, vis.length ? `<div class="plist">${rows}</div>` : '<p class="empty">No projects pending. New ones appear as AstroTech grows.</p>');
+      h += sect('projects:done', 'Completed', { count: done.length }, done.length
+        ? `<div class="plist">${done.map((p) => `<div class="row pdone"><span class="pname"><b>${p.name}</b>${p.log ? `<small>${p.log}</small>` : ''}</span></div>`).join('')}</div>`
+        : '<p class="empty">Nothing funded yet.</p>');
       return h;
     },
     update(S) {
-      const v = { pdone: Object.keys(S.projects).length + ' COMPLETED' };
-      for (const p of this.vis(S)) v['pr_' + p.id] = { h: `FUND<small>${money(p.cost)}</small>`, dis: S.money < p.cost };
+      const v = {};
+      for (const p of this.vis(S)) {
+        const dis = S.money < p.cost;
+        v['pr_' + p.id] = { h: 'BUY', dis, tip: dis ? 'txt:Needs ' + money(p.cost - S.money) + ' more cash.' : 'proj:' + p.id };
+      }
       return v;
     },
   };
@@ -644,17 +650,30 @@
   PANELS.company = {
     sig(S, M) { return 'co' + (M.incorp ? 1 : 0); },
     build(S, M) {
-      let h = `${conHead('AstroTech Mining Co.', 'Valuation, shares and the quarterly target.', '<span class="tog" data-k="status"></span>')}
-        <div class="kpis"><div class="kpi slot"><div class="k">VALUATION</div><div class="v" data-k="val"></div></div><div class="kpi slot"><div class="k">YOUR STAKE</div><div class="v" data-k="own"></div></div>
-        <div class="kpi slot"><div class="k">YOUR EQUITY</div><div class="v good" data-k="eq"></div></div><div class="kpi slot"><div class="k">PEAK EQUITY THIS RUN</div><div class="v gold" data-k="peak"></div></div></div>
-        <div class="slot" style="margin-bottom:10px"><div class="note" style="margin:0" data-k="breakdown"></div></div>`;
-      if (!M.incorp) h += `<div class="slot teaser">PRIVATE COMPANY. RESEARCH INCORPORATION TO GO PUBLIC, ISSUE SHARES AND FACE THE QUARTERLY MARKET.</div>`;
-      else h += `<div class="kpis"><div class="kpi slot"><div class="k">SHARE PRICE</div><div class="v gold" data-k="sp"></div></div><div class="kpi slot"><div class="k">SHARES OUTSTANDING</div><div class="v" data-k="so"></div></div></div>
-          <div class="slot" style="margin-bottom:10px"><div class="spread"><span class="tog">INVESTOR CONFIDENCE</span><span data-k="conf"></span></div><div class="bar tall good"><i data-k="confbar"></i></div>
-          <div class="spread" style="margin-top:10px"><span class="tog">THIS QUARTER</span><span data-k="qtxt"></span></div><div class="bar tall ice"><i data-k="qbar"></i></div><div class="note" style="margin:8px 0 0" data-k="qlast"></div></div>
-          <div class="cards"><div class="card slot"><h4>Issue New Shares</h4><p>Sell 10% more shares for cash now. Your stake shrinks and confidence dips.</p>${btn('issue', 0, 'gold', 'issue')}</div>
-          <div class="card slot"><h4>Share Buyback</h4><p>Retire up to 5% of shares from the public. Your stake grows and confidence rises.</p>${btn('buyback', 0, '', 'buyback')}</div></div>`;
-      return h + `<p class="note" style="margin-top:10px">Expansion rewards are based on peak equity this run: valuation times your stake. Valuation tracks revenue, not cash on hand.</p>`;
+      let h = conHead('AstroTech Mining Co.', 'Valuation, your stake, and the quarterly market once we go public.', '<span class="tog" data-k="status"></span>');
+      h += `<div class="kstrip">
+          <div><div class="k">VALUATION</div><div class="v" data-k="val"></div></div>
+          <div><div class="k">YOUR STAKE</div><div class="v" data-k="own"></div></div>
+          <div><div class="k">YOUR EQUITY</div><div class="v good" data-k="eq"></div></div>
+          <div><div class="k">PEAK EQUITY THIS RUN</div><div class="v gold" data-k="peak"></div></div></div>
+        <p class="note" data-k="breakdown"></p>`;
+      if (!M.incorp) h += '<p class="empty">Private company. Research Incorporation in the Research console to go public and unlock shares.</p>';
+      else {
+        h += sect('company:quarter', 'Quarterly', {}, `
+          <div class="spread"><span class="tog">TARGET</span><span data-k="qtarget"></span></div>
+          <div class="spread"><span class="tog">PROGRESS</span><span data-k="qtxt"></span></div>
+          <div class="bar tall ice"><i data-k="qbar"></i></div>
+          <div class="spread" style="margin-top:10px"><span class="tog">INVESTOR CONFIDENCE</span><span data-k="conf"></span></div>
+          <div class="bar tall good"><i data-k="confbar"></i></div>
+          <p class="note" style="margin:8px 0 0" data-k="qlast"></p>`);
+        h += sect('company:shares', 'Shares', {}, `
+          <div class="kstrip"><div><div class="k">SHARE PRICE</div><div class="v gold" data-k="sp"></div></div><div><div class="k">SHARES OUTSTANDING</div><div class="v" data-k="so"></div></div></div>
+          <div class="plist">
+            <div class="row" style="--cols:minmax(0,1fr) auto"><span class="pname"><b>Issue new shares</b><small>Sell 10% more for cash now. Your stake shrinks and confidence dips.</small></span>${btn('issue', 0, 'gold tiny', 'issue')}</div>
+            <div class="row" style="--cols:minmax(0,1fr) auto"><span class="pname"><b>Share buyback</b><small>Retire up to 5% of public shares. Your stake grows and confidence rises.</small></span>${btn('buyback', 0, 'tiny', 'buyback')}</div>
+          </div>`);
+      }
+      return h + '<p class="note" style="margin-top:4px">Expansion rewards are based on peak equity this run: valuation times your stake. Valuation tracks revenue, not cash on hand.</p>';
     },
     update(S, M) {
       const val = E.valuation(M), own = E.ownership();
@@ -666,7 +685,8 @@
         v.conf = (M.rules.conf || sh.conf).toFixed(2) + ' / 3.00';
         v.confbar = { w: ((M.rules.conf || sh.conf) - 0.25) / 2.75 * 100 };
         const target = sh.lastQ > 0 ? sh.lastQ * (M.flags.guidance ? 1.1 : 1.2) : 0;
-        v.qtxt = `${money(sh.qEarn)}${target ? ' of ' + money(target) + ' target' : ' (baseline quarter)'} · ${Math.ceil(90 - sh.qT)}s left`;
+        v.qtarget = target ? money(target) : 'Baseline quarter';
+        v.qtxt = `${money(sh.qEarn)} · ${Math.ceil(90 - sh.qT)}s left`;
         v.qbar = { w: target ? sh.qEarn / target * 100 : sh.qT / 90 * 100 };
         v.qlast = sh.lastResult ? (sh.lastResult.target ? `Last quarter: ${money(sh.lastResult.earned)} vs ${money(sh.lastResult.target)} target, ${sh.lastResult.beat ? 'BEAT' : 'MISSED'}. Beat streak: ${sh.streak}.` : 'Last quarter set the baseline.') : 'Quarterly reports every 90 seconds. Beat the growth target to raise confidence.';
         const cash = E.sharePrice(M) * sh.total * 0.1 * 0.9;
@@ -748,26 +768,45 @@
   PANELS.archive = {
     sig(S) { return Object.keys(S.ach).length + '|' + Object.keys(S.artifacts).length + '|' + S.memorial.length + '|' + S.dirIdx + '|' + AT.guide.manualSig(S); },
     build(S) {
-      let h = `${conHead('Archive', 'Board directives, field manual, artifacts, achievements and records.', '')}
-        <h3 class="section-h">${SPR.img('mission')} BOARD DIRECTIVES <span class="sub">${S.dirIdx}/${AT.DIRECTIVES.length}</span></h3><div class="dirs">`;
-      AT.DIRECTIVES.forEach((d, i) => { if (i <= S.dirIdx + 2) h += `<div class="dir ${i < S.dirIdx ? 'got' : i === S.dirIdx ? 'cur' : ''}"><b>${i + 1}</b><span>${i <= S.dirIdx ? d.text : 'Classified.'}</span></div>`; });
-      h += `</div>${AT.guide.manualHTML(S)}<h3 class="section-h">${SPR.img('gem')} ARTIFACTS <span class="sub">${Object.keys(S.artifacts).length}/${Object.keys(AT.ARTIFACTS).length} · kept through every reset</span></h3><div class="arts">`;
+      const co = S.settings.collapsed = S.settings.collapsed || {};
+      // Long reference sections start folded so the page is short by default. Directives, manual and artifacts stay open.
+      for (const k of ['archive:achievements', 'archive:memorial', 'archive:stats']) if (co[k] === undefined) co[k] = true;
+      let h = conHead('Archive', 'Board directives, field manual, artifacts, achievements and records.', '');
+      // Board directives: done items fold into the count, the current one is highlighted, the next two are classified.
+      const n = AT.DIRECTIVES.length, i0 = S.dirIdx;
+      let dirs = '<div class="dirs">';
+      if (i0 < n) dirs += `<div class="dir cur"><b>${i0 + 1}</b><span>${AT.DIRECTIVES[i0].text}</span></div>`;
+      else dirs += '<p class="empty">All board directives complete.</p>';
+      for (let i = i0 + 1; i <= i0 + 2 && i < n; i++) dirs += `<div class="dir"><b>${i + 1}</b><span>Classified.</span></div>`;
+      h += sect('archive:directives', 'Board directives', { count: `${i0}/${n}` }, dirs + '</div>');
+      // Field manual: the guide renders its own heading and count, so lift the count into a note and keep the list.
+      const fm = AT.guide.manualHTML(S);
+      const sub = (fm.match(/<span class="sub">([^<]*)<\/span>/) || [])[1] || '';
+      h += sect('archive:manual', 'Field manual', {}, `<p class="note">${sub}</p>${fm.replace(/^<h3[\s\S]*?<\/h3>/, '')}`);
+      // Artifacts grid
+      const gotA = Object.keys(S.artifacts).length, totA = Object.keys(AT.ARTIFACTS).length;
+      let arts = '<p class="note">Kept through every reset.</p><div class="arts">';
       for (const [id, a] of Object.entries(AT.ARTIFACTS)) {
         const got = S.artifacts[id];
-        h += `<div class="art slot ${got ? '' : 'locked'}" data-tip="${got ? 'art:' + id : 'txt:Undiscovered. ' + (a.find !== undefined ? 'A rare find on ordinary missions in the ' + AT.REGIONS[a.find].name + '.' : 'Recovered on an expedition.')}"><img class="ico lg pixel" src="${SPR.icon(got ? a.icon : 'lock')}" alt=""><span>${got ? a.name : '???'}</span></div>`;
+        arts += `<div class="art slot ${got ? '' : 'locked'}" data-tip="${got ? 'art:' + id : 'txt:Undiscovered. ' + (a.find !== undefined ? 'A rare find on ordinary missions in the ' + AT.REGIONS[a.find].name + '.' : 'Recovered on an expedition.')}"><img class="ico lg pixel" src="${SPR.icon(got ? a.icon : 'lock')}" alt=""><span>${got ? a.name : '???'}</span></div>`;
       }
-      h += `</div><h3 class="section-h">${SPR.img('trophy')} ACHIEVEMENTS <span class="sub">${Object.keys(S.ach).length}/${AT.ACHIEVEMENTS.length}</span></h3><div class="achs">`;
-      for (const a of AT.ACHIEVEMENTS) { const got = !!S.ach[a.id]; h += `<div class="ach slot ${got ? '' : 'locked'}"><img class="ico lg pixel" src="${SPR.icon(got ? 'trophy' : 'lock')}" alt=""><div><b>${a.name}</b><span>${a.desc}</span></div></div>`; }
-      h += `</div><h3 class="section-h">${SPR.img('skull')} MEMORIAL WALL <span class="sub">${S.memorial.length} names</span></h3>`;
-      if (!S.memorial.length) h += '<div class="slot teaser">NO NAMES YET.</div>';
-      else h += `<div class="memorial slot">${S.memorial.slice().reverse().map((m) => `<div><b>${esc(m.name)}</b> · L${m.level} · ${esc(m.ship)} · ${esc(m.target)}</div>`).join('')}</div>`;
-      h += `<h3 class="section-h">${SPR.img('stats')} RECORDS</h3><table class="stats-t"><tbody>
+      h += sect('archive:artifacts', 'Artifacts', { count: `${gotA}/${totA}` }, arts + '</div>');
+      // Achievements
+      let achs = '<div class="achs">';
+      for (const a of AT.ACHIEVEMENTS) { const got = !!S.ach[a.id]; achs += `<div class="ach slot ${got ? '' : 'locked'}"><img class="ico lg pixel" src="${SPR.icon(got ? 'trophy' : 'lock')}" alt=""><div><b>${a.name}</b><span>${a.desc}</span></div></div>`; }
+      h += sect('archive:achievements', 'Achievements', { count: `${Object.keys(S.ach).length}/${AT.ACHIEVEMENTS.length}` }, achs + '</div>');
+      // Memorial wall
+      const mem = S.memorial.length
+        ? `<div class="memorial">${S.memorial.slice().reverse().map((m) => `<div><b>${esc(m.name)}</b> · L${m.level} · ${esc(m.ship)} · ${esc(m.target)}</div>`).join('')}</div>`
+        : '<p class="empty">No names yet. Pilots lost on missions are remembered here.</p>';
+      h += sect('archive:memorial', 'Memorial wall', { count: S.memorial.length }, mem);
+      // Stats
+      h += sect('archive:stats', 'Records', {}, `<table class="stats-t"><tbody>
         ${[['Time played', 'tp'], ['This run', 'tr'], ['Total revenue', 'te'], ['Revenue this run', 'ter'], ['Missions flown', 'tm'], ['Ships lost', 'tl'], ['Pilots lost', 'td'], ['Contracts delivered', 'tc'], ['Surveys', 'ts'], ['Ore mined', 'to'],
-          ['Kuiper Jumps', 'r0'], ['Oort Exoduses', 'r1'], ['Stellar Ignitions', 'r2'], ['Galactic Ascents', 'r3'], ['Universe', 'ng']].map(([l, k]) => `<tr><td>${l}</td><td data-k="${k}"></td></tr>`).join('')}</tbody></table>`;
+          ['Kuiper Jumps', 'r0'], ['Oort Exoduses', 'r1'], ['Stellar Ignitions', 'r2'], ['Galactic Ascents', 'r3'], ['Universe', 'ng']].map(([l, k]) => `<tr><td>${l}</td><td data-k="${k}"></td></tr>`).join('')}</tbody></table>`);
       return h;
     },
     update(S) {
-      const st = S.settings;
       const v = { tp: AT.fmtTime(S.stats.totalTime), tr: AT.fmtTime(S.runT), te: money(S.earnedTotal), ter: money(S.earnedRun), tm: fmt(S.stats.missions), tl: fmt(S.stats.losses), td: fmt(S.stats.deaths),
         tc: fmt(S.stats.contracts), ts: fmt(S.stats.surveyed), to: fmt(S.stats.oreMined) + 't', r0: String(S.layers[0].runs), r1: String(S.layers[1].runs), r2: String(S.layers[2].runs), r3: String(S.layers[3].runs), ng: '#' + (S.ngPlus + 1) };
       return v;
