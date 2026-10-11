@@ -187,7 +187,7 @@
     AT.audio.play('card');
   }
   function renderCard() {
-    if (!cardEl) { cardEl = document.createElement('aside'); cardEl.id = 'briefing'; cardEl.className = 'panel'; cardEl.setAttribute('role', 'status'); document.body.appendChild(cardEl); }
+    if (!cardEl) { cardEl = document.createElement('aside'); cardEl.id = 'briefing'; cardEl.className = 'panel'; cardEl.setAttribute('role', 'status'); const con = document.querySelector('main.console'); if (con) con.prepend(cardEl); else document.body.appendChild(cardEl); }
     const b = shown, S = E.S;
     const tab = b.goto && S.reveal[b.goto] ? b.goto : null;
     const isTab = b.when[0] === 'reveal';

@@ -30,8 +30,8 @@
     if (window.ResizeObserver) new ResizeObserver(() => SC.resize()).observe(cv.parentElement);
   };
   // === monitor sizing ===
-  // The canvas fills whatever height the monitor column leaves (between 16:9 and 4:5). The integer pixel scale keeps the internal width near
-  // 320+ px where the column allows it (3x from 960 css px, 2x from 620, else 1x); the height follows the wrapper, clamped by its min/max-height.
+  // The canvas fills whatever height the monitor column leaves (between 16:9 and 4:5). Integer pixel scale: 3x from 960 css px, 2x from 400,
+  // else 1x. Desktop never drops to 1x: chunky pixels and a legible canvas font matter more than extra internal width.
   const ASPECT_MIN = 9 / 16, ASPECT_MAX = 1.25;
   SC.resize = function () {
     if (!cv) return;
@@ -42,7 +42,7 @@
     wrap.style.minHeight = narrow ? '' : hMin + 'px';
     wrap.style.maxHeight = narrow ? '' : hMax + 'px';
     const cssH = Math.max(hMin, Math.min(hMax, wrap.clientHeight || hMin));
-    const sc = cssW >= 960 ? 3 : cssW >= 620 ? 2 : 1;
+    const sc = cssW >= 960 ? 3 : cssW >= 400 ? 2 : 1;
     const nW = Math.max(200, Math.round(cssW / sc));
     const nH = Math.max(Math.round(nW * ASPECT_MIN), Math.min(Math.round(nW * ASPECT_MAX), Math.round(cssH / sc)));
     if (nW === W && nH === H && sc === scale && cv.width === W && cv.height === H) return;
