@@ -487,12 +487,19 @@
   // tab: the console the player must be in; sel: the element to highlight once there.
   // =====================================================================
   AT.TUTORIAL = [
-    { id: 'welcome', kick: 'WELCOME, OPERATOR', text: 'AstroTech Mining Co. Ships dig rocks, you sell the ore, the Board takes the credit. Four clicks to your first paycheck.' },
-    { id: 'fleet', kick: 'STEP 1 · FLEET', tab: 'fleet', tabText: 'Open the FLEET console. That is where ships live.', sel: '[data-act="buyship"][data-arg="prospector"]', text: 'Buy a PROSPECTOR. One pilot, one drill, one bad idea. It is also the cheapest.', lost: 'That one did not come back. Buy another PROSPECTOR. Ships are consumables too.' },
-    { id: 'launch', kick: 'STEP 2 · MISSIONS', tab: 'missions', tabText: 'Open MISSION CONTROL. The first target is already picked.', sel: '#tabbody .tcard [data-act="launch"]', text: 'Press LAUNCH. The target is surveyed, so the risk is low. Low is not none.', lost: 'No cargo. It happens. Press LAUNCH again.' },
-    { id: 'flight', kick: 'STEP 3 · IN FLIGHT', sel: '.monitor', text: 'Out, drill, back. Watch the ship in the viewport; the Flight Deck under it has the countdown. Cargo lands in your hold.' },
-    { id: 'sell', kick: 'STEP 4 · MARKET', tab: 'market', tabText: 'Cargo is home. Open the MARKET console.', sel: '[data-act="sellall"]', text: 'Press SELL EVERYTHING. Big sales push the price down, so later you will want to be patient.' },
+    { id: 'welcome', kick: 'LICENSE GRANTED', text: 'AstroTech Mining Co. is certified. The rocket is yours and the Board would like ore. Three clicks to your first paycheck.' },
+    { id: 'launch', kick: 'STEP 1 · MISSIONS', tab: 'missions', tabText: 'Open MISSION CONTROL. The first target is already picked.', sel: '#tabbody .tcard [data-act="launch"]', text: 'Press LAUNCH. The target is surveyed, so the risk is low. Low is not none.', lost: 'No cargo. It happens. Press LAUNCH again.' },
+    { id: 'flight', kick: 'STEP 2 · IN FLIGHT', sel: '.monitor', text: 'Out, drill, back. Watch the ship in the viewport; the Flight Deck under it has the countdown. Cargo lands in your hold.' },
+    { id: 'sell', kick: 'STEP 3 · MARKET', tab: 'market', tabText: 'Cargo is home. Open the MARKET console.', sel: '[data-act="sellall"]', text: 'Press SELL EVERYTHING. Big sales push the price down, so later you will want to be patient.' },
     { id: 'done', kick: 'FIRST PAYCHECK', sel: '#directive', text: 'The Board posts orders up here, one at a time. Follow the BOARD ORDER pill; click it for the full list. New consoles unlock as you grow, each with a short briefing.' },
+  ];
+  // The prologue coach marks. Stateless: guide.js derives the current step from the prologue state (first match wins), so a loaded save resumes correctly.
+  // tab: the prologue console the player must be in; sel: what to highlight once there.
+  AT.PRO_COACH = [
+    { id: 'click', kick: 'PROLOGUE · 1', tab: 'pro_workshop', tabText: 'Open the WORKSHOP.', sel: '#tabbody [data-coach="click"]', text: 'Click MACHINE PART. The lathe does the rest, slowly. Hold the button if the clicking gets old.' },
+    { id: 'hire', kick: 'PROLOGUE · 2', tab: 'pro_workshop', tabText: 'Open the WORKSHOP.', sel: '#tabbody [data-coach="hire"]', text: 'Hire a MACHINIST. She keeps parts in stock so you do not have to stand at the lathe.', poor: 'Keep machining. A machinist costs money, and you have only spent some of it.' },
+    { id: 'fire', kick: 'PROLOGUE · 3', tab: 'pro_stand', tabText: 'The TEST STAND is online. Open it.', sel: '#tabbody [data-coach="fire"]', text: 'Press STATIC FIRE. An engine runs for eighteen seconds. Failure is data; so is success, in smaller amounts.', poor: 'You need an engine on hand. The workshop is making one.' },
+    { id: 'launch', kick: 'PROLOGUE · 4', tab: 'pro_launch', tabText: 'Parts are on the shelf. Open the LAUNCH console.', sel: '#tabbody [data-coach="launch"]', text: 'ASSEMBLE the Hop vehicle, then LAUNCH it. One hundred metres up, one hundred metres down.', poor: 'You need one airframe, one engine and one avionics unit. Check the workshop.' },
   ];
 
   // =====================================================================
@@ -516,6 +523,19 @@
       lines: ['Valuation follows revenue, not cash. Equity is valuation times your stake.', 'Peak equity this run sets what an Expansion pays out.', 'Cash on hand is not valuation. Neither is honesty.'] },
     { id: 'b_expansion', when: ['reveal', 'expansion'], icon: 'expansion', title: 'Expansion Console', goto: 'expansion',
       lines: ['Expansion resets your run for permanent power. The payout depends on peak equity.', 'The button lights up once you have enough. Until then, grow.', 'Everything resets except what the Board decides to keep.'] },
+    // ---- prologue consoles (shown only while the prologue runs)
+    { id: 'b_pro_stand', when: ['pro', 'stand'], icon: 'scope', title: 'Test Stand', goto: 'pro_stand',
+      lines: ['Static fires burn a spare engine on the stand and pay out Data.', 'Weaker engines blow up more often. Blowing up pays more Data. This is considered a feature.', 'A Test Engineer (R&D) runs them without you.'] },
+    { id: 'b_pro_rd', when: ['pro', 'rd'], icon: 'research', title: 'R&D', goto: 'pro_rd',
+      lines: ['Spend Data on reliability, tooling and landing legs.', 'Reliability is per subsystem. A launch is only as good as its weakest part.', 'Every test also teaches the team a little, for free.'] },
+    { id: 'b_pro_launch', when: ['pro', 'launch'], icon: 'rocket', title: 'Launch Complex', goto: 'pro_launch',
+      lines: ['Assemble a vehicle from parts, then fly it. Four tiers: Hop, Suborbital, Orbit, Orbit and Recover.', 'The odds are the product of your reliabilities. Read them before you press the button.', 'A failed rocket is gone. Its Data is not.'] },
+    { id: 'b_pro_funding', when: ['pro', 'funding'], icon: 'contract', title: 'Funding', goto: 'pro_funding',
+      lines: ['Contracts ride along on a tier and pay on success. Grants are cash for having done something.', 'Investors appear as decision cards over the viewport. Two options, both with consequences.', 'The Board exists now. It lent you the money.'] },
+    { id: 'b_pro_workshop', when: ['proStaff', 'machinist'], icon: 'crew', title: 'Stock Targets', goto: 'pro_workshop',
+      lines: ['The machinist keeps the shelf stocked for the next rocket. Change the targets in Parts.', 'Spare parts feed static fires and the next tier. Clicking MACHINE PART still speeds up any running job.', 'Salary is paid per second. The machinist reads the contract carefully.'] },
+    { id: 'b_license', when: ['proCert'], icon: 'trophy', title: 'Mining License', goto: 'missions',
+      lines: ['The proof-of-concept rocket is now your first Prospector, flown by the founding pilot.', 'Reliability earned in the prologue gives it a small permanent safety bonus. Leftover Data became RP.', 'The Board has stopped asking whether this will work. It asks how much.'] },
     // ---- mechanics
     { id: 'b_pads', when: ['pads'], icon: 'pad', title: 'Launch Pads', goto: 'fleet',
       lines: ['Each pad flies one ship at a time. Extra ships wait their turn.', 'Build pads in Fleet. Each costs four times the last.', 'Ships queue. Revenue does not.'] },

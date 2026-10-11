@@ -1,6 +1,6 @@
 # Headless test of the demo build: fast-forward to a ready Kuiper Jump, trigger it, screenshot the end-of-demo screen.
 # Usage: node tools/build.mjs --demo && python3 tools/shot_demo.py [outdir]
-import sys, os, pathlib, json
+import sys, os, pathlib, json, subprocess
 from playwright.sync_api import sync_playwright
 root = pathlib.Path(__file__).resolve().parent.parent
 out = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/claude-0/shots-demo'); out.mkdir(parents=True, exist_ok=True)
@@ -10,6 +10,9 @@ with sync_playwright() as p:
     exe = os.environ.get('CHROMIUM_PATH') or ('/opt/pw-browsers/chromium' if pathlib.Path('/opt/pw-browsers/chromium').exists() else None)
     b = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
     pg = b.new_page(viewport={'width': 1366, 'height': 800})
+    # the demo run starts with the prologue skipped (the prologue itself is covered by shot_prologue.py --demo)
+    skip_save = subprocess.check_output(['node', str(root / 'tools/skipsave.js')], text=True)
+    pg.add_init_script("try { if (!localStorage.getItem('astrotech.demo.save.v2')) localStorage.setItem('astrotech.demo.save.v2', %s); } catch (e) {}" % json.dumps(skip_save))
     pg.on('console', lambda m: errors.append(f'{m.type}: {m.text}') if m.type == 'error' else None)
     pg.on('pageerror', lambda e: errors.append(f'pageerror: {e}'))
     pg.goto(url); pg.wait_for_timeout(1500)

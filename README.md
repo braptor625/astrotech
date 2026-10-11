@@ -15,13 +15,15 @@ Oort Cloud → the stars → other galaxies. Fully mouse-playable.
 | `src/render.js` | Pixel renderer: rotating lit planets/asteroids, stars, galaxies, bitmap font |
 | `src/fx.js` | Pooled pixel particle engine (`AT.FX`): exhaust, smoke, explosions, sparks, ambient effects; density follows the Graphics setting |
 | `src/scene.js` | The viewport: system map, launch complex, close-up |
-| `src/guide.js` | Start-of-game tutorial (coach marks) and feature briefings / Field Manual |
+| `src/guide.js` | Prologue coach marks, the (short) mining tutorial, and feature briefings / Field Manual |
+| `src/prologue_ui.js`, `src/prologue_scene.js` | The prologue ("Proof of Concept"): its five consoles, job list, investor cards, certification beat, and the test-stand / launch-complex scene. See `docs/prologue.md` |
 | `src/ui.js` | Consoles, tooltips, saving, offline progress, main loop |
 | `src/audio.js` | Chiptune sound effects synthesized with WebAudio |
 | `src/style.css`, `src/index.html` | Retro UI chrome and page shell |
 | `tools/build.mjs` | Bundles everything into one self-contained HTML file |
 | `tools/sim.js` | Headless balance bot: `node tools/sim.js 16` simulates 16 hours of play |
-| `tools/shot.py` | Headless browser play-test with screenshots (needs Python Playwright) |
+| `tools/shot.py` | Headless browser play-test with screenshots (needs Python Playwright); starts from a skipped-prologue save (`tools/skipsave.js`) |
+| `tools/shot_prologue.py`, `tools/pro_play.py` | Plays the real prologue through the UI and screenshots every stage; `playtest.py` reuses the player |
 | `dist/web/astrotech.html` | Browser build |
 | `steam/` | Electron + Steamworks wrapper. See `steam/README.md` |
 | `art/blender/` | Blender pipeline: headless store-art renders + Blender MCP setup. See `art/blender/README.md` |

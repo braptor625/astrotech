@@ -1,5 +1,5 @@
 # Headless play-test v2: loads the standalone build, plays the opening, screenshots every console.
-import sys, os, pathlib, json
+import sys, os, pathlib, json, subprocess
 from playwright.sync_api import sync_playwright
 root = pathlib.Path(__file__).resolve().parent.parent
 out = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/claude-0/shots'); out.mkdir(parents=True, exist_ok=True)
@@ -19,6 +19,9 @@ with sync_playwright() as p:
     exe = os.environ.get('CHROMIUM_PATH') or ('/opt/pw-browsers/chromium' if pathlib.Path('/opt/pw-browsers/chromium').exists() else None)
     b = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
     pg = b.new_page(viewport={'width': W, 'height': H})
+    # the mining game from the start: a save whose prologue was skipped (the prologue itself is shot by shot_prologue.py)
+    skip_save = subprocess.check_output(['node', str(root / 'tools/skipsave.js'), 'tutorial'], text=True)
+    pg.add_init_script("try { if (!localStorage.getItem('astrotech.save.v2')) localStorage.setItem('astrotech.save.v2', %s); } catch (e) {}" % json.dumps(skip_save))
     pg.on('console', lambda m: errors.append(f'{m.type}: {m.text}') if m.type in ('error',) else None)
     pg.on('pageerror', lambda e: errors.append(f'pageerror: {e}'))
     pg.goto(url); pg.wait_for_timeout(1500)
@@ -26,10 +29,10 @@ with sync_playwright() as p:
         pg.evaluate("t => { AT.E.S.settings.textSize = t; document.documentElement.dataset.text = t; }", TEXT); pg.wait_for_timeout(300)
     pg.screenshot(path=str(out / '00_start.png'))
     pg.click('[data-act=tut-skip]'); pg.wait_for_timeout(400)  # the tutorial dim would hide the layout in every later shot
-    pg.screenshot(path=str(out / '00b_fresh.png'))  # empty states: no ships, ops summary, no flights
-    # opening: buy a ship, pick the surveyed target, launch
+    pg.screenshot(path=str(out / '00b_fresh.png'))  # the opening: one ship (the proof-of-concept rocket), ops summary, no flights
+    # opening: look at the ship, pick the surveyed target, launch
     pg.click('[data-act=tab][data-arg=fleet]'); pg.wait_for_timeout(200)
-    pg.click('[data-act=buyship][data-arg=prospector]'); pg.wait_for_timeout(200)
+    if pg.evaluate('AT.E.S.ships.length') != 1: errors.append('a skipped prologue should leave exactly one ship')
     pg.screenshot(path=str(out / '01_fleet.png'))
     pg.click('[data-act=tab][data-arg=missions]'); pg.wait_for_timeout(200)
     pg.click('.trow >> nth=0'); pg.wait_for_timeout(300)

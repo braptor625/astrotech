@@ -45,6 +45,13 @@ ipcMain.on('window:fullscreen', (e) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   if (win) win.setFullScreen(!win.isFullScreen());
 });
+// small device-level flags (e.g. prologueDone), kept beside the save so they survive a wiped save
+const flagFile = () => path.join(saveDir(), 'flags.json');
+const readFlags = () => { try { return JSON.parse(fs.readFileSync(flagFile(), 'utf8')) || {}; } catch (err) { return {}; } };
+ipcMain.on('flag:get', (e, name) => { e.returnValue = readFlags()[name] || null; });
+ipcMain.on('flag:set', (e, name, value) => {
+  try { const f = readFlags(); f[name] = value; fs.mkdirSync(saveDir(), { recursive: true }); fs.writeFileSync(flagFile(), JSON.stringify(f), 'utf8'); } catch (err) { console.error('[flag] failed', err); }
+});
 ipcMain.on('app:quit', () => app.quit());
 
 function createWindow() {

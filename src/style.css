@@ -662,3 +662,84 @@ html.hc .scene-wrap { box-shadow: 0 0 0 3px #fff; }
 .sect .dir.cur { background: color-mix(in srgb, var(--slot-lo) 70%, transparent); box-shadow: inset 4px 0 0 var(--gold); }
 .sect .arts, .sect .achs { margin-top: 2px; }
 .sect .memorial { padding: 4px 0 0; }
+
+/* === prologue === */
+/* The prologue shell (prologue_ui.js): Workshop, Test Stand, R&D, Launch, Funding, the job list under the viewport, the investor card, the certification beat. */
+img.pico { image-rendering: pixelated; image-rendering: crisp-edges; vertical-align: middle; flex: none; }
+.chip.data b { color: var(--violet); }
+.ink { color: var(--ink); font-weight: 400; }
+.tabbody .need { color: var(--warn); }
+/* Workshop: the lathe */
+.lathe { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+@container con (max-width: 640px) { .lathe { grid-template-columns: minmax(0, 1fr); } }
+.lathe-side { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.lathe-side .seg { gap: 4px; }
+.mach { appearance: none; border: 0; font: inherit; color: #2a1a00; background: var(--gold); clip-path: var(--notch); position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 1fr auto; gap: 6px 16px; align-items: center; text-align: left; padding: 16px 18px 16px; min-height: 132px; line-height: 1.05;
+  box-shadow: inset 0 0 0 var(--px) var(--edge), inset var(--px) var(--px) 0 calc(var(--px) * 2) #fff2b0, inset calc(var(--px) * -1) calc(var(--px) * -1) 0 calc(var(--px) * 2) var(--gold-lo); transition: filter 80ms; touch-action: manipulation; }
+.mach:hover { filter: brightness(1.08); }
+.mach:active { transform: translateY(3px); filter: brightness(0.96); }
+.mach:disabled { filter: grayscale(0.85) brightness(0.62); cursor: var(--cur-no, not-allowed); }
+.mach:disabled:active { transform: none; }
+.mach:focus-visible { --focus: #2a1a00; }
+.mach-art { grid-row: 1; display: grid; place-items: center; padding: 6px; background: rgba(42, 26, 0, 0.22); box-shadow: inset 0 0 0 3px rgba(42, 26, 0, 0.55); }
+.mach-txt { grid-row: 1; min-width: 0; }
+.mach-txt b { display: block; font-family: var(--f-display); font-weight: 700; font-size: var(--fs-xl); letter-spacing: 0.06em; text-wrap: balance; }
+.mach-txt small { display: block; margin-top: 5px; font-family: var(--f-body); font-size: var(--fb-s); letter-spacing: 0; }
+.mach-bar { grid-column: 1 / -1; grid-row: 2; height: 10px; background: rgba(42, 26, 0, 0.3); position: relative; box-shadow: 0 0 0 2px rgba(42, 26, 0, 0.55); }
+.mach-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: #2a1a00; }
+@media (prefers-reduced-motion: no-preference) { .mach:not(:disabled):not(:active) .mach-art img { animation: bob 1.6s steps(2) infinite; } }
+@keyframes bob { 50% { transform: translateY(-2px); } }
+html.reduce-motion .mach .mach-art img { animation: none; }
+.part-row .step { display: inline-flex; gap: 3px; }
+.part-row .step .btn { min-width: 26px; padding-inline: 6px; }
+.row.job .bar { margin-top: 5px; }
+.row.job.idle { color: var(--faint); }
+.rd-data { font-family: var(--f-display); font-size: var(--fs-m); color: var(--violet); } .rd-data b { font-weight: 400; }
+/* Test Stand */
+.stand-run { display: grid; gap: 6px; margin-top: 10px; font-family: var(--f-display); font-size: var(--fs-xs); }
+.stand-run .bar { margin-top: 0; }
+/* R&D */
+.rel-row { align-items: center; }
+.rel-row .bar { margin-top: 0; }
+.rel-row .bar i { background: var(--good); }
+.rel-note { font-size: var(--fb-xs); padding: 0 8px 4px 8px; }
+.rd-row.done { opacity: 0.6; }
+/* Launch */
+.padstat { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; font-family: var(--f-display); font-size: var(--fs-s); }
+.padstat b { font-weight: 400; color: var(--gold); }
+.padstat .dim { font-family: var(--f-body); font-size: var(--fb-s); }
+.padstat + .bar { margin: 8px 0 6px; }
+.tier-row { align-items: start; }
+.tier-row .tier-act { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.tier-row .tier-eco { grid-column: 1 / -1; font-size: var(--fb-xs); }
+.tag { font-family: var(--f-display); font-size: var(--fs-xs); color: var(--ice); letter-spacing: 0.06em; }
+.chip-p { display: inline-block; font-family: var(--f-display); font-size: var(--fs-xs); padding: 2px 5px 1px; margin: 3px 3px 0 0; background: var(--slot-lo); box-shadow: 0 0 0 2px var(--edge); font-variant-numeric: tabular-nums; }
+.chip-p.ok { color: var(--good); } .chip-p.no { color: var(--bad); }
+/* Funding */
+.pitch { display: grid; gap: 6px; padding: 8px 4px 10px; }
+.pitch h4 { font-size: var(--fs-s); color: var(--gold); }
+.pitch p { margin: 0; font-size: var(--fb-m); }
+.pitch .btn { white-space: normal; text-align: left; flex: 1 1 160px; }
+.need-line { grid-column: 1 / -1; font-size: var(--fb-xs); }
+.need-line:empty { display: none; }
+.pitch-card h3 { font-size: var(--fs-m); }
+/* the job list under the viewport */
+.frow.pro { grid-template-columns: 28px minmax(0, 1fr) auto; }
+.frow.pro .fico { display: grid; place-items: center; }
+.frow.pro .fico img { width: 24px; height: 24px; }
+.ops-order { margin: 0; font-size: var(--fb-m); line-height: 1.1; }
+.ops-order .dim { font-family: var(--f-display); font-size: var(--fs-xs); }
+/* certification: the license beat. Same black screen as the ending. */
+#ending.cert { overflow-y: auto; }
+#ending.cert .lines { margin: auto; text-align: left; }
+#ending.cert .story { font-size: var(--fb-xl); color: var(--dim); }
+#ending.cert .brand { font-family: var(--f-display); font-size: var(--fs-xl); color: var(--gold); letter-spacing: 0.06em; margin: 8px 0 22px; text-shadow: 3px 3px 0 #2a1a00; }
+#ending.cert .sum { font-size: var(--fb-m); color: var(--dim); margin-bottom: 8px; }
+#ending.cert .sum b { color: var(--ink); font-weight: 400; }
+.cert-name { opacity: 0; animation: fadein 1s steps(5) forwards; display: grid; gap: 6px; margin: 18px 0 14px; max-width: 440px; }
+.cert-name label { font-family: var(--f-display); font-size: var(--fs-xs); color: var(--faint); letter-spacing: 0.08em; }
+.cert-name input { background: var(--slot-lo); color: var(--gold); border: 0; box-shadow: inset 0 0 0 3px var(--edge), inset 0 0 0 5px var(--panel-hi); font-family: var(--f-display); font-size: var(--fs-m); padding: 10px 12px; width: 100%; user-select: text; -webkit-user-select: text; }
+.cert-name input:focus-visible { outline: 3px dashed var(--gold); outline-offset: 3px; }
+#ending.cert .flex { margin-top: 6px; }
+@media (max-width: 899px) { .rail-g { display: none; } }
+/* === /prologue === */

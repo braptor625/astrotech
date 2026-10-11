@@ -65,6 +65,7 @@
     warn:    ['....kk....', '...kggk...', '...kggk...', '..kgkkgk..', '..kgkkgk..', '.kggkkggk.', '.kggggggk.', 'kgggkkgggk', 'kggggggggk', 'kkkkkkkkkk'],
     trophy:  ['kkkkkkkkkk', 'kgggggggGk', 'kgyggggGGk', '.kgggggGk.', '..kgggGk..', '...kgGk...', '....kk....', '...kGGk...', '..kGGGGk..', '..kkkkkk..'],
     pick:    ['..kkkkk...', '.kssssSk..', 'kss..kSSk.', 'k...knk.k.', '....knk...', '...knk....', '..knk.....', '.knk......', 'knk.......', 'kk........'],
+    hammer:  ['.kkkkkkk..', 'kSssssSSk.', 'kSsssssSk.', '.kkkSkkk..', '...knk....', '...knk....', '...kNk....', '...kNk....', '...kNk....', '...kkk....'],
     star:    ['....kk....', '....kgk...', '...kggk...', 'kkkgyygkkk', 'kggyyyyggk', '.kggyyggk.', '..kggggk..', '.kggk.kgk.', '.kgk...kk.', '.kk.......'],
     // artifact glyphs
     box:     ['.kkkkkkkk.', 'kSssssssSk', 'kskkkkkksk', 'kskrrrrksk', 'kskrkkrksk', 'kskrrrrksk', 'kskkkkkksk', 'kSssssssSk', 'kSSSSSSSSk', '.kkkkkkkk.'],
