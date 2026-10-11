@@ -568,17 +568,49 @@
     'whipple': 'Whip|ple',
   };
   const resLabel = (name) => name.replace(/[A-Za-z]+/g, (w) => (RES_SHY[w.toLowerCase()] || w).replace(/\|/g, '­'));
+  // Master-detail: a compact tree of short nodes (the master) and a detail pane for the hovered or selected node.
+  // Clicking a node selects it; the pane's RESEARCH button (data-act="res") buys it.
+  let resSel = null, resHover = null;
+  const resKids = (id) => AT.RESEARCH.filter((x) => x.req.includes(id));
+  const resUnmet = (r) => r.req.filter((q) => !E.S.research[q]);
+  function resFocus(S) {
+    const ok = (id) => id && E.RES[id] && E.RES[id].region === resPage;
+    if (ok(resHover)) return resHover;
+    if (ok(resSel)) return resSel;
+    let best = null;
+    for (const r of AT.RESEARCH) if (r.region === resPage && !S.research[r.id] && E.researchAvailable(r) && (!best || r.cost < best.cost)) best = r;
+    return best ? best.id : (AT.RESEARCH.find((r) => r.region === resPage) || AT.RESEARCH[0]).id;
+  }
+  // After buying a node, move the selection on to what it just unlocked, so the next step is already in the pane.
+  function resAfterBuy(id) {
+    const nx = resKids(id).find((r) => !E.S.research[r.id] && E.researchAvailable(r));
+    resSel = nx ? nx.id : id; resHover = null;
+  }
+  function resDetail(r, S) {
+    const done = !!S.research[r.id];
+    const chips = r.req.length ? r.req.map((q) => `<button class="rchip ${S.research[q] ? 'ok' : 'need'}" data-act="ressel" data-arg="${q}" data-tip="txt:${S.research[q] ? 'Done.' : 'Not researched yet. Click to jump to it.'}">${S.research[q] ? '✓' : '▸'} ${E.RES[q].name}</button>`).join('') : '<span class="dim">none, ready to research</span>';
+    const kids = resKids(r.id).map((k) => k.name);
+    return `<div class="rd-top"><h3>${r.name}</h3><span class="rd-cost">${done ? 'DONE' : fmt(r.cost) + ' RP'}</span></div><p class="rd-fx">${r.desc}</p><p class="rd-req"><span class="k">Requires</span> ${chips}</p>${kids.length ? `<p class="rd-req"><span class="k">Leads to</span> <span class="dim">${kids.join(', ')}</span></p>` : ''}`;
+  }
   PANELS.research = {
     sig(S) { return resPage + '|' + S.region + '|' + AT.RESEARCH.filter((r) => r.region === resPage).map((r) => (S.research[r.id] ? 1 : 0)).join(''); },
     build(S, M) {
       if (resPage > S.region) resPage = 0;
       let h = conHead('Research', 'Spend RP on nodes that unlock ships, automation and bigger numbers.', `<div class="chip slot rp"><img class="ico pixel" src="${SPR.icon('rp')}" alt=""><b data-k="rp"></b><span class="sub" data-k="rprate"></span></div>`);
-      if (S.region > 0) h += `<div class="seg" style="margin-bottom:8px">${Array.from({ length: S.region + 1 }, (_, i) => `<button class="btn ${i === resPage ? 'on' : ''}" data-act="respage" data-arg="${i}">${AT.REGIONS[i].short}</button>`).join('')}</div>`;
-      h += `<p class="note" data-k="rpnote"></p><div class="tree-wrap"><div class="tree" id="tree"><svg id="tree-svg"></svg>`;
-      for (const r of AT.RESEARCH.filter((x) => x.region === resPage)) h += `<button class="btn node" style="grid-column:${r.col + 1};grid-row:${r.row + 1}" data-act="res" data-arg="${r.id}" data-tip="res:${r.id}" data-k="n_${r.id}" id="node-${r.id}"></button>`;
-      return h + '</div></div>';
+      if (S.region > 0) h += `<div class="segctl rseg" role="tablist">${Array.from({ length: S.region + 1 }, (_, i) => `<button class="btn" role="tab" data-act="respage" data-arg="${i}" data-k="rg_${i}"></button>`).join('')}</div>`;
+      h += '<p class="note" data-k="rpnote" hidden></p>';
+      h += `<div class="rwrap"><aside class="rdet sect"><div class="rd-body" data-k="rdh"></div><div class="rd-act"><button class="btn gold big" data-act="res" data-arg="" data-k="rdbtn" id="rdbtn"></button></div><div class="rd-prog"><div class="bar thin"><i data-k="rdbar"></i></div><span class="rd-eta" data-k="rdeta"></span></div></aside><div class="rtree" id="tree"><svg id="tree-svg"></svg>`;
+      for (const r of AT.RESEARCH.filter((x) => x.region === resPage)) h += `<button class="btn rn" style="grid-column:${r.col + 1};grid-row:${r.row + 1}" data-act="ressel" data-arg="${r.id}" data-req="${r.req.join(',')}" data-k="n_${r.id}" id="node-${r.id}"></button>`;
+      h += '</div></div>';
+      h += '<p class="rkey"><span class="kd go"></span>Ready <span class="kd soon"></span>Needs more RP <span class="kd lock"></span>Locked (names its prerequisite) <span class="kd done"></span>Done</p>';
+      return h;
     },
     after(body, S) {
+      if (!body._rh) {
+        body._rh = 1;
+        const at = (e) => { const n = e.target.closest && e.target.closest('.rn'); resHover = n ? n.dataset.arg : null; };
+        body.addEventListener('mouseover', at); body.addEventListener('focusin', at);
+      }
       // Nodes are fluid-width, so connectors are re-measured whenever the tree is resized.
       const draw = () => {
         const svg = $('#tree-svg', body), tree = $('#tree', body);
@@ -608,12 +640,28 @@
       });
     },
     update(S, M) {
-      const v = { rp: fmt(S.rp) + ' RP', rprate: '+' + fmt(E.rpRate(M)) + '/s' };
-      v.rpnote = M.rules.noResearch ? 'Research is disabled in this challenge.' : M.scientists > 0 ? 'Scientists produce research. Output grows with revenue. Click a node to research it.' : 'Hire Scientists in the Crew console to start producing research.';
-      for (const r of AT.RESEARCH.filter((x) => x.region === resPage)) {
-        const done = !!S.research[r.id], avail = E.researchAvailable(r);
-        v['n_' + r.id] = { h: `${resLabel(r.name)}<small>${done ? 'DONE' : avail ? fmt(r.cost) + ' RP' : 'LOCKED'}</small>`, dis: !done && !(avail && S.rp >= r.cost), cls: { done, lockd: !done && !avail } };
+      const rate = E.rpRate(M), off = M.rules.noResearch;
+      const v = { rp: fmt(S.rp) + ' RP', rprate: '+' + fmt(rate) + '/s' };
+      v.rpnote = off ? { t: 'Research is disabled in this challenge.', hide: false } : M.scientists > 0 ? { hide: true } : { t: 'No RP yet. Hire Scientists in the Crew console to start producing research.', hide: false };
+      const pageList = (p) => AT.RESEARCH.filter((x) => x.region === p);
+      for (let i = 0; i <= S.region; i++) {
+        const n = off ? 0 : pageList(i).filter((r) => !S.research[r.id] && E.researchAvailable(r) && S.rp >= r.cost).length;
+        v['rg_' + i] = { h: `${AT.REGIONS[i].short}${n ? ` <span class="rg-n">${n}</span>` : ''}`, cls: { on: i === resPage }, tip: n ? 'txt:' + n + ' node' + (n > 1 ? 's' : '') + ' you can research now' : '' };
       }
+      const fid = resFocus(S), fr = E.RES[fid], fpre = new Set(fr.req);
+      for (const r of pageList(resPage)) {
+        const done = !!S.research[r.id], avail = E.researchAvailable(r), go = !done && avail && S.rp >= r.cost && !off;
+        const un = resUnmet(r);
+        const sub = done ? '✓' : !avail ? '◂ ' + E.RES[un[0]].name : fmt(r.cost) + ' RP';
+        v['n_' + r.id] = { h: `<span class="nn">${resLabel(r.name)}</span><small>${sub}</small>`, cls: { done, lockd: !done && !avail, go, soon: !done && avail && !go, sel: r.id === fid, pre: !done && fpre.has(r.id) } };
+      }
+      // detail pane
+      const done = !!S.research[fid], avail = E.researchAvailable(fr), un = resUnmet(fr), need = fr.cost - S.rp;
+      v.rdh = { h: resDetail(fr, S) };
+      v.rdbar = { w: done ? 100 : !avail ? 0 : Math.min(100, S.rp / fr.cost * 100) };
+      v.rdeta = done ? 'Researched.' : !avail ? 'Locked. Research ' + un.map((q) => E.RES[q].name).join(' and ') + ' first.' : need <= 0 ? 'You can afford this now.' : `Need ${fmt(need)} more RP` + (rate > 0 ? ` (about ${AT.fmtTime(need / rate)})` : '');
+      v.rdbtn = { h: done ? 'DONE' : !avail ? 'LOCKED' : `RESEARCH<small>${fmt(fr.cost)} RP</small>`, dis: done || !avail || need > 0 || off, tip: done ? 'txt:Already researched.' : off ? 'txt:Research is disabled in this challenge.' : !avail ? 'txt:Research ' + un.map((q) => E.RES[q].name).join(' and ') + ' first.' : need > 0 ? 'txt:Need ' + fmt(need) + ' more RP.' : 'txt:Spend ' + fmt(fr.cost) + ' RP.' };
+      const bt = $('#rdbtn'); if (bt && bt.dataset.arg !== fid) bt.dataset.arg = fid;
       return v;
     },
   };
@@ -681,61 +729,81 @@
   // ----------------------------- EXPANSION -----------------------------
   PANELS.expansion = {
     sig(S, M) {
-      let s = S.region + '|' + (S.challenge ? S.challenge.id : '-') + '|' + Object.keys(S.chDone).length + '|';
-      for (let i = 0; i < AT.LAYERS.length; i++) s += (S.layers[i].runs > 0 || S.layers[i].cur > 0 ? 'r' : '-') + (M.flags['autoLayer' + i] ? 'a' : '') + (M.flags['challenges' + i] ? 'c' : '') + AT.LAYERS[i].milestones.filter((m) => S.layers[i].runs >= m.n).length;
+      let s = S.region + '|' + (S.challenge ? S.challenge.id : '-') + '|' + Object.keys(S.chDone).length + '|' + JSON.stringify(S.settings.collapsed || {}) + '|';
+      for (let i = 0; i < AT.LAYERS.length; i++) s += (S.layers[i].runs > 0 || S.layers[i].cur > 0 ? 'r' : '-') + S.layers[i].runs + (M.flags['autoLayer' + i] ? 'a' : '') + (M.flags['challenges' + i] ? 'c' : '') + AT.LAYERS[i].milestones.filter((m) => S.layers[i].runs >= m.n).length;
       return s + (E.canEnd() ? 'E' : '');
     },
     build(S, M) {
-      let h = conHead('Expansion', 'Prestige: reset the run for permanent power.', '');
+      // A flat collapsible sub-section inside a layer card. Challenges start collapsed.
+      const col = S.settings.collapsed = S.settings.collapsed || {};
+      const xsub = (key, title, count, body, closed) => {
+        if (closed && col[key] === undefined) col[key] = true;
+        const c = isCollapsed(key);
+        return `<div class="xsub ${c ? 'collapsed' : ''}"><div class="xsub-head"><button class="sect-tog" data-act="collapse" data-arg="${key}" aria-expanded="${!c}">${title}</button>${count !== undefined ? `<span class="count">${count}</span>` : ''}</div><div class="xsub-body">${body}</div></div>`;
+      };
+      const topLayer = Math.min(S.region, AT.LAYERS.length - 1); // older layers start with their lists folded
+      let h = conHead('Expansion', 'Reset the run for permanent power. Upgrades are bought with what each reset earns.', '');
       if (S.challenge) {
         const c = E.challengeDef(S.challenge);
-        h += `<div class="slot challenge-on"><div class="spread"><h3>CHALLENGE: ${c.name}</h3>${btn('abandon', 0, 'bad', 'abandon')}</div><p class="note">${c.desc} Goal: reach ${money(AT.LAYERS[S.challenge.layer].req)} equity. Reward: ${c.reward}</p><div class="bar tall steps"><i data-k="chbar"></i></div></div>`;
+        h += `<section class="sect xchal"><div class="spread"><h3>CHALLENGE: ${c.name}</h3>${btn('abandon', 0, 'bad tiny', 'abandon')}</div><p class="note">${c.desc} Goal: reach ${money(AT.LAYERS[S.challenge.layer].req)} equity. Reward: ${c.reward}</p><div class="bar tall steps"><i data-k="chbar"></i></div></section>`;
       }
-      if (S.region >= 4) h += `<div class="layer slot"><h3 style="color:#e8ecff">The Last Transaction</h3><p class="flav">Reach ${money(AT.FINAL_REQ)} in equity. There will be nothing left to buy.</p><div class="bar tall steps"><i data-k="endbar"></i></div><div class="spread" style="margin-top:8px"><span data-k="endtxt"></span>${btn('end', 0, 'gold big', 'endbtn')}</div></div>`;
+      if (S.region >= 4) h += `<section class="sect xl xend"><div class="xl-head"><h3>The Last Transaction</h3></div><div class="xl-go"><div class="xl-info"><div class="xl-req">Reach ${money(AT.FINAL_REQ)} in equity. There will be nothing left to buy.</div><div class="bar tall steps"><i data-k="endbar"></i></div><div class="xl-sub" data-k="endtxt"></div></div>${btn('end', 0, 'gold big', 'endbtn')}</div></section>`;
       for (let i = AT.LAYERS.length - 1; i >= 0; i--) {
         if (S.region < i) continue;
-        const L = AT.LAYERS[i], st = S.layers[i];
-        h += `<div class="layer slot"><div class="spread"><h3 style="color:${L.color}"><img class="ico pixel" src="${SPR.icon(LAYER_ICON[i])}" alt=""> ${L.name}</h3><span class="cur" data-k="l${i}cur"></span></div>
-          <p class="flav">${L.flavor}</p><div class="bar tall steps"><i data-k="l${i}bar"></i></div>
-          <div class="spread" style="margin-top:8px"><span data-k="l${i}txt"></span>${btn('prestige', i, 'gold big', 'l' + i + 'btn')}</div>`;
-        if (M.flags['autoLayer' + i]) h += `<div class="spread" style="margin-top:10px"><span class="tog">AUTOMATION</span><div class="seg">${btn('daemon', i, '', 'l' + i + 'auto')}${['smart', 1, 2, 5].map((m) => `<button class="btn" data-act="dmode" data-arg="${i}:${m}" data-k="l${i}m${m}" data-tip="txt:${m === 'smart' ? 'Reset when the gain per second starts falling.' : 'Reset when the gain is at least x' + m + ' the previous one.'}">${m === 'smart' ? 'SMART' : 'x' + m + ' LAST'}</button>`).join('')}</div></div>`;
-        if (st.runs > 0 || st.cur > 0) {
-          h += '<div class="cards" style="margin-top:10px">';
-          for (const u of L.upgrades) h += `<div class="card slot sub" data-tip="lup:${i}:${u.id}" data-k="lc_${u.id}"><h4>${u.name} <span class="lvl" data-k="lv_${u.id}"></span></h4><p>${u.desc}</p>${btn('lup', i + ':' + u.id, '', 'lb_' + u.id, 'data-rep="1"')}</div>`;
-          h += '</div><h4 class="section-h" style="margin-top:10px">MILESTONES</h4><div class="miles">';
+        const L = AT.LAYERS[i], st = S.layers[i], started = st.runs > 0 || st.cur > 0;
+        h += `<section class="sect xl" style="--lc:${L.color}"><div class="xl-head" data-tip="txt:${L.flavor.replace(/"/g, '&quot;')}"><h3><img class="ico pixel" src="${SPR.icon(LAYER_ICON[i])}" alt=""> ${L.name}</h3><span class="cur" data-k="l${i}cur"></span></div>
+          <div class="xl-go"><div class="xl-info"><div class="xl-req">Needs <b>${money(L.req)}</b> peak equity</div><div class="bar tall steps"><i data-k="l${i}bar"></i></div><div class="xl-sub" data-k="l${i}txt"></div></div>${btn('prestige', i, 'big', 'l' + i + 'btn')}</div>`;
+        if (M.flags['autoLayer' + i]) h += `<div class="xl-auto"><span class="tog">AUTOMATION</span><div class="seg">${btn('daemon', i, 'tiny', 'l' + i + 'auto')}${['smart', 1, 2, 5].map((m) => `<button class="btn tiny" data-act="dmode" data-arg="${i}:${m}" data-k="l${i}m${m}" data-tip="txt:${m === 'smart' ? 'Reset when the gain per second starts falling.' : 'Reset when the gain is at least x' + m + ' the previous one.'}">${m === 'smart' ? 'SMART' : 'x' + m + ' LAST'}</button>`).join('')}</div></div>`;
+        if (started) {
+          let rows = '';
+          for (const u of L.upgrades) rows += `<div class="row xu" style="--cols:minmax(0,1fr) 44px auto" data-tip="lup:${i}:${u.id}" data-k="lc_${u.id}"><span class="xu-n"><b>${u.name}</b><span class="dim">${u.desc}</span></span><span class="num lvl" data-k="lv_${u.id}"></span>${btn('lup', i + ':' + u.id, 'tiny', 'lb_' + u.id, 'data-rep="1"')}</div>`;
+          h += xsub(`expansion:up${i}`, 'Upgrades', L.upgrades.length, rows, i !== topLayer);
           const all = E.milestoneAll(i);
-          for (const ms of L.milestones) h += `<div class="mile ${all || st.runs >= ms.n ? 'got' : ''}"><b>${ms.n}</b><span>${ms.text}</span></div>`;
-          h += '</div>';
-          if (M.flags['challenges' + i]) {
-            h += `<h4 class="section-h" style="margin-top:10px">CHALLENGES <span class="sub">reach ${money(L.req)} equity under a restriction</span></h4><div class="cards">`;
-            for (const c of L.challenges) h += `<div class="card slot sub ${S.chDone[c.id] ? 'maxed' : ''}"><h4>${c.name}</h4><p>${c.desc}</p><p class="gold">${c.reward}</p>${S.chDone[c.id] ? '<div class="teaser">COMPLETED</div>' : btn('challenge', i + ':' + c.id, '', 'ch_' + c.id)}</div>`;
-            h += '</div>';
+          const gotN = L.milestones.filter((ms) => all || st.runs >= ms.n).length;
+          let nextSeen = false, ml = '';
+          for (const ms of L.milestones) {
+            const got = all || st.runs >= ms.n, next = !got && !nextSeen;
+            if (next) nextSeen = true;
+            ml += `<div class="xm ${got ? 'got' : next ? 'next' : ''}"><span class="mk">${got ? '✓' : next ? '▸' : '·'}</span><b>${ms.n}</b><span>${ms.text}${next ? ` <em>(${st.runs}/${ms.n} runs)</em>` : ''}</span></div>`;
           }
-        }
-        h += '</div>';
+          h += xsub(`expansion:ms${i}`, 'Milestones <span class="sub">by number of runs</span>', gotN + '/' + L.milestones.length, ml, i !== topLayer);
+          if (M.flags['challenges' + i]) {
+            let cl = '';
+            for (const c of L.challenges) cl += `<div class="row xc ${S.chDone[c.id] ? 'maxed' : ''}" style="--cols:minmax(0,1fr) auto"><span class="xu-n"><b>${c.name}</b><span class="dim">${c.desc}</span><span class="gold">Reward: ${c.reward}</span></span>${S.chDone[c.id] ? '<span class="good">DONE</span>' : btn('challenge', i + ':' + c.id, 'tiny', 'ch_' + c.id)}</div>`;
+            h += xsub(`expansion:ch${i}`, `Challenges <span class="sub">reach ${money(L.req)} equity under a restriction</span>`, L.challenges.filter((c) => S.chDone[c.id]).length + '/' + L.challenges.length, cl, true);
+          }
+        } else h += '<p class="empty">Upgrades, milestones and challenges unlock with your first jump.</p>';
+        h += '</section>';
       }
-      if (S.region < AT.LAYERS.length && S.layers[S.region] && S.layers[S.region].runs === 0 && S.region < 4) h += `<div class="slot teaser">THE ${AT.REGIONS[S.region + 1].name.toUpperCase()} AWAITS.</div>`;
+      let ahead = '';
+      for (let i = Math.max(0, S.region + 1); i < AT.LAYERS.length; i++) {
+        const L = AT.LAYERS[i];
+        ahead += `<p class="xt"><b style="color:${L.color}">${L.name}</b> <span>unlocks after ${AT.LAYERS[i - 1].name}. Needs ${money(L.req)} equity.</span></p>`;
+      }
+      if (ahead) h += `<div class="xahead">${ahead}</div>`;
       return h;
     },
     update(S, M) {
       const v = {};
       const now = performance.now();
       if (S.challenge) { v.chbar = { w: Math.log10(Math.max(1, S.peakEquity)) / Math.log10(AT.LAYERS[S.challenge.layer].req) * 100 }; v.abandon = { h: 'ABANDON<small>resets the run</small>' }; }
+      let lead = -1;
+      for (let i = AT.LAYERS.length - 1; i >= 0; i--) if (S.region >= i && E.pendingGain(i, M) >= 1) { lead = i; break; }
       for (let i = 0; i < AT.LAYERS.length; i++) {
         if (S.region < i) continue;
         const L = AT.LAYERS[i], st = S.layers[i];
         const g = E.pendingGain(i, M);
         v[`l${i}cur`] = fmt(st.cur) + ' ' + L.sym;
-        if (g < 1) { v[`l${i}bar`] = { w: Math.log10(Math.max(1, S.peakEquity)) / Math.log10(L.req) * 100 }; v[`l${i}txt`] = `Peak equity ${money(S.peakEquity)} of ${money(L.req)} needed`; }
-        else { v[`l${i}bar`] = { w: 100 }; v[`l${i}txt`] = `+${fmt(g)} ${L.cur} · next at ${money(E.nextGainAt(i, M))} · ${st.runs} done`; }
+        if (g < 1) { v[`l${i}bar`] = { w: Math.log10(Math.max(1, S.peakEquity)) / Math.log10(L.req) * 100 }; v[`l${i}txt`] = `Peak equity ${money(S.peakEquity)} of ${money(L.req)}. ${st.runs} done.`; }
+        else { v[`l${i}bar`] = { w: 100 }; v[`l${i}txt`] = `Ready: +${fmt(g)} ${L.cur}. Next gain at ${money(E.nextGainAt(i, M))}. ${st.runs} done.`; }
         const conf = confirmUntil[i] && confirmUntil[i] > now;
-        v[`l${i}btn`] = { h: conf ? 'CLICK AGAIN TO CONFIRM<small>this resets your run</small>' : `${L.verb}<small>+${fmt(g)} ${L.sym}</small>`, dis: g < 1, cls: { confirm: conf } };
+        v[`l${i}btn`] = { h: conf ? 'CLICK AGAIN TO CONFIRM<small>this resets your run</small>' : `${L.verb}<small>${g >= 1 ? '+' + fmt(g) + ' ' + L.sym : 'not ready'}</small>`, dis: g < 1, cls: { confirm: conf, gold: i === lead }, tip: g < 1 ? 'txt:Reach ' + money(L.req) + ' peak equity first.' : 'txt:Resets the run for +' + fmt(g) + ' ' + L.cur + '.' };
         if (M.flags['autoLayer' + i]) { v[`l${i}auto`] = { t: st.auto ? 'ON' : 'OFF', cls: { on: st.auto } }; for (const m of ['smart', 1, 2, 5]) v[`l${i}m${m}`] = { cls: { on: String(st.autoMode) === String(m) } }; }
         for (const u of L.upgrades) {
           const lvl = st.upg[u.id] || 0, mx = lvl >= u.max, cost = E.layerUpCost(i, u);
           v['lv_' + u.id] = u.max > 1 ? `${lvl}/${u.max}` : lvl ? 'OWNED' : '';
-          v['lb_' + u.id] = { h: mx ? 'MAXED' : `BUY<small>${fmt(cost)} ${L.sym}</small>`, dis: mx || st.cur < cost };
-          v['lc_' + u.id] = { cls: { maxed: mx } };
+          v['lb_' + u.id] = { h: mx ? 'MAXED' : `BUY<small>${fmt(cost)} ${L.sym}</small>`, dis: mx || st.cur < cost, tip: mx ? '' : st.cur < cost ? 'txt:Need ' + fmt(cost - st.cur) + ' more ' + L.sym + '.' : '' };
+          v['lc_' + u.id] = { cls: { maxed: mx, aff: !mx && st.cur >= cost } };
         }
         for (const c of L.challenges) if (!S.chDone[c.id]) v['ch_' + c.id] = { h: S.challenge && S.challenge.id === c.id ? 'IN PROGRESS<small>—</small>' : 'START<small>resets the run</small>', dis: !!S.challenge };
       }
@@ -1186,8 +1254,9 @@
       case 'autosell': S.autosell = arg; break;
       case 'deliver': { const r = E.deliverContract(+arg); ok = !!r; if (ok) { AT.audio.play('sell'); floatAt(el, '+' + money(r)); } break; }
       case 'dismiss': E.dismissContract(+arg); break;
-      case 'res': ok = E.buyResearch(arg); AT.audio.play(ok ? 'research' : 'deny'); break;
-      case 'respage': resPage = +arg; sig = null; break;
+      case 'res': ok = E.buyResearch(arg); if (ok) resAfterBuy(arg); AT.audio.play(ok ? 'research' : 'deny'); break;
+      case 'ressel': resSel = arg; resHover = null; break;
+      case 'respage': resPage = +arg; resSel = null; resHover = null; sig = null; break;
       case 'proj': ok = E.buyProject(arg); AT.audio.play(ok ? 'research' : 'deny'); break;
       case 'issue': ok = !!E.issueShares(); AT.audio.play(ok ? 'sell' : 'deny'); break;
       case 'buyback': ok = E.buyback(); AT.audio.play(ok ? 'buy' : 'deny'); break;
