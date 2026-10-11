@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """New-player playtest bot for AstroTech.
 
-Plays the opening like a human: only clicks visible [data-act] buttons, follows the
+Plays the prologue first (tools/pro_play.py: MACHINE PART clicks until a machinist is affordable, then the timed jobs, R&D, launch tiers,
+funding, certification), then the mining opening like a human: only clicks visible [data-act] buttons, follows the
 Board Directive strip, picks the top row of Mission Control (what a newcomer sees first).
 State is touched only to fast-forward time (AT.E.simulate). Decisions use visible DOM text.
 
@@ -10,6 +11,8 @@ Writes <outdir>/timeline.txt, <outdir>/issues.txt and screenshots.
 """
 import sys, os, re, pathlib, json
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from pro_play import ProPlayer
 
 root = pathlib.Path(__file__).resolve().parent.parent
 out = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/claude-0/playtest'); out.mkdir(parents=True, exist_ok=True)
@@ -39,7 +42,8 @@ with sync_playwright() as p:
     pg.goto((root / 'steam/game/index.html').as_uri()); pg.wait_for_timeout(1200)
 
     # ---- helpers -------------------------------------------------------
-    def gt(): return pg.evaluate('AT.E.S.time')          # for logging only
+    base_t = [0.0]
+    def gt(): return pg.evaluate('AT.E.S.time') - base_t[0]   # for logging only; mining time starts at the license
     def money_txt(): return pg.inner_text('#st-money')
     def dir_txt(): return pg.inner_text('#directive').strip()
     def dir_no():
@@ -209,7 +213,7 @@ with sync_playwright() as p:
         t = text.lower()
         if 'first ship' in t:
             open_tab('fleet'); return click_enabled('[data-act=buyship]', 'BUY ship (first enabled)') or 'no'
-        if 'launch a mission' in t:
+        if 'launch a mission' in t or 'first mining mission' in t:
             if not open_tab('missions'): return 'notab'
             # the Mission Control card may already be open on a target: a human just presses LAUNCH
             card = [b_ for b_ in vis('#tabbody .tcard [data-act=launch]') if b_.is_enabled()]
@@ -294,9 +298,30 @@ with sync_playwright() as p:
             if open_tab('missions') and any('NO PILOT' in tx for tx in ssub_texts()):
                 hire_pilots()
 
-    # ---- main loop ------------------------------------------------------
+    # ---- prologue pass --------------------------------------------------
+    pro_time = None
     snap('00_start')
-    log('game start; directive: ' + dir_txt())
+    if pg.evaluate('AT.E.proActive()'):
+        log('prologue start; order: ' + dir_txt())
+        def plog(msg):
+            timeline.append(msg); print(msg, flush=True)
+        pro_issue = lambda k, m: issue('pro_' + k, m, shot=False)
+        pp = ProPlayer(pg, log=plog, snap=None, step=2.0, issue=pro_issue)
+        pro_time = pp.run(max_game_s=3600)
+        snap('01_prologue_certified')
+        if not pg.locator('#ending.cert').count(): issue('nocert', 'the certification beat did not appear')
+        pp.finish(wait=False)
+        pg.wait_for_timeout(500)
+        base_t[0] = pg.evaluate('AT.E.S.time')
+        log(f'PROLOGUE DONE in {fmt_t(pro_time)} of game time ({pro_time / 60:.1f} min); {pp.clicks} clicks; briefings read: {len(pp.briefings)}')
+        s_ = pg.evaluate('AT.E.S.pro.cert')
+        log(f'  license: {s_["attempts"]} attempts, {s_["fails"]} lost, rel avg {s_["relAvg"] * 100:.0f}%, +{s_["rp"]:.0f} RP, risk bonus {s_["bonus"] * 100:.0f}%, name "{s_["name"]}"')
+        if pro_time < 300 or pro_time > 1800:
+            issue('pro_len', f'the prologue took {pro_time / 60:.1f} min of game time for this bot (design target: 15-25 min for humans, about 10 for the engine bot)', shot=False)
+        if pg.locator('#tabs [data-arg=pro_workshop]').count(): issue('pro_rail', 'prologue consoles still in the rail after certification', shot=False)
+        snap('02_mining_shell')
+    # ---- main loop ------------------------------------------------------
+    log('mining start; directive: ' + dir_txt())
     last_dir, last_dir_t, last_money_t = dir_no(), gt(), gt()
     shot_dirs = {1, 2, 3, 4, 5, 6, 8, 10, 14, 20, 25, 30}
     idle_waits = 0
@@ -341,7 +366,8 @@ with sync_playwright() as p:
     b.close()
 
 if tut_state != 'done': issues.append(f'tutorial did not finish on its own (state {tut_state})')
-summary = f'tutorial: {tut_state}; briefings dismissed: {len(brief_log)} ({", ".join(brief_log)})\n(top row showed >=35% risk on {top_risky[0]} picks)\nFINAL: game time {fmt_t(final["t"])}, directives done {final["dir"]}, missions {final["missions"]}, losses {final["losses"]}, pilot deaths {final["deaths"]}, ships {final["ships"]}, pilots {final["pilots"]}'
+summary = f'prologue: {pro_time / 60:.1f} min of game time (certified)\n' if pro_time else ''
+summary += f'tutorial: {tut_state}; briefings dismissed: {len(brief_log)} ({", ".join(brief_log)})\n(top row showed >=35% risk on {top_risky[0]} picks)\nFINAL: game time {fmt_t(final["t"])}, directives done {final["dir"]}, missions {final["missions"]}, losses {final["losses"]}, pilot deaths {final["deaths"]}, ships {final["ships"]}, pilots {final["pilots"]}'
 (out / 'timeline.txt').write_text('\n'.join(timeline) + '\n\n' + summary + '\n')
 (out / 'issues.txt').write_text('\n'.join(issues) + '\n')
 print('\n=== ISSUES ===\n' + '\n'.join(issues))

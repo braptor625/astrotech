@@ -440,8 +440,8 @@
   // cond: [type, value]. reward: cash (seconds of revenue, min $), rp (seconds)
   // =====================================================================
   AT.DIRECTIVES = [
-    { text: 'Buy your first ship in the Fleet console.', cond: ['ships', 1] },
-    { text: 'Launch a mission at the surveyed target. Unsurveyed rocks carry extra risk.', cond: ['launched', 1] },
+    { text: 'Launch your first mining mission. The surveyed target is the safe one.', cond: ['launched', 1] },
+    { text: 'Bring your first cargo home. Unsurveyed rocks carry extra risk.', cond: ['missions', 1] },
     { text: 'Sell your cargo on the Market.', cond: ['sold', 1] },
     { text: 'Hire a pilot for your next ship.', cond: ['pilots', 1], reward: { min: 300 } },
     { text: 'Survey an asteroid with a probe.', cond: ['surveyed', 1], reward: { min: 500 } },
@@ -487,12 +487,19 @@
   // tab: the console the player must be in; sel: the element to highlight once there.
   // =====================================================================
   AT.TUTORIAL = [
-    { id: 'welcome', kick: 'WELCOME, OPERATOR', text: 'AstroTech Mining Co. Ships dig rocks, you sell the ore, the Board takes the credit. Four clicks to your first paycheck.' },
-    { id: 'fleet', kick: 'STEP 1 · FLEET', tab: 'fleet', tabText: 'Open the FLEET console. That is where ships live.', sel: '[data-act="buyship"][data-arg="prospector"]', text: 'Buy a PROSPECTOR. One pilot, one drill, one bad idea. It is also the cheapest.', lost: 'That one did not come back. Buy another PROSPECTOR. Ships are consumables too.' },
-    { id: 'launch', kick: 'STEP 2 · MISSIONS', tab: 'missions', tabText: 'Open MISSION CONTROL. The first target is already picked.', sel: '#tabbody .tcard [data-act="launch"]', text: 'Press LAUNCH. The target is surveyed, so the risk is low. Low is not none.', lost: 'No cargo. It happens. Press LAUNCH again.' },
-    { id: 'flight', kick: 'STEP 3 · IN FLIGHT', sel: '.monitor', text: 'Out, drill, back. Watch the ship in the viewport; the Flight Deck under it has the countdown. Cargo lands in your hold.' },
-    { id: 'sell', kick: 'STEP 4 · MARKET', tab: 'market', tabText: 'Cargo is home. Open the MARKET console.', sel: '[data-act="sellall"]', text: 'Press SELL EVERYTHING. Big sales push the price down, so later you will want to be patient.' },
+    { id: 'welcome', kick: 'LICENSE GRANTED', text: 'AstroTech Mining Co. is certified. The rocket is yours and the Board would like ore. Three clicks to your first paycheck.' },
+    { id: 'launch', kick: 'STEP 1 · MISSIONS', tab: 'missions', tabText: 'Open MISSION CONTROL. The first target is already picked.', sel: '#tabbody .tcard [data-act="launch"]', text: 'Press LAUNCH. The target is surveyed, so the risk is low. Low is not none.', lost: 'No cargo. It happens. Press LAUNCH again.' },
+    { id: 'flight', kick: 'STEP 2 · IN FLIGHT', sel: '.monitor', text: 'Out, drill, back. Watch the ship in the viewport; the Flight Deck under it has the countdown. Cargo lands in your hold.' },
+    { id: 'sell', kick: 'STEP 3 · MARKET', tab: 'market', tabText: 'Cargo is home. Open the MARKET console.', sel: '[data-act="sellall"]', text: 'Press SELL EVERYTHING. Big sales push the price down, so later you will want to be patient.' },
     { id: 'done', kick: 'FIRST PAYCHECK', sel: '#directive', text: 'The Board posts orders up here, one at a time. Follow the BOARD ORDER pill; click it for the full list. New consoles unlock as you grow, each with a short briefing.' },
+  ];
+  // The prologue coach marks. Stateless: guide.js derives the current step from the prologue state (first match wins), so a loaded save resumes correctly.
+  // tab: the prologue console the player must be in; sel: what to highlight once there.
+  AT.PRO_COACH = [
+    { id: 'click', kick: 'PROLOGUE · 1', tab: 'pro_workshop', tabText: 'Open the WORKSHOP.', sel: '#tabbody [data-coach="click"]', text: 'Click MACHINE PART. The lathe does the rest, slowly. Hold the button if the clicking gets old.' },
+    { id: 'hire', kick: 'PROLOGUE · 2', tab: 'pro_workshop', tabText: 'Open the WORKSHOP.', sel: '#tabbody [data-coach="hire"]', text: 'Hire a MACHINIST. She keeps parts in stock so you do not have to stand at the lathe.', poor: 'Keep machining. A machinist costs money, and you have only spent some of it.' },
+    { id: 'fire', kick: 'PROLOGUE · 3', tab: 'pro_stand', tabText: 'The TEST STAND is online. Open it.', sel: '#tabbody [data-coach="fire"]', text: 'Press STATIC FIRE. An engine runs for eighteen seconds. Failure is data; so is success, in smaller amounts.', poor: 'You need an engine on hand. The workshop is making one.' },
+    { id: 'launch', kick: 'PROLOGUE · 4', tab: 'pro_launch', tabText: 'Parts are on the shelf. Open the LAUNCH console.', sel: '#tabbody [data-coach="launch"]', text: 'ASSEMBLE the Hop vehicle, then LAUNCH it. One hundred metres up, one hundred metres down.', poor: 'You need one airframe, one engine and one avionics unit. Check the workshop.' },
   ];
 
   // =====================================================================
@@ -516,6 +523,19 @@
       lines: ['Valuation follows revenue, not cash. Equity is valuation times your stake.', 'Peak equity this run sets what an Expansion pays out.', 'Cash on hand is not valuation. Neither is honesty.'] },
     { id: 'b_expansion', when: ['reveal', 'expansion'], icon: 'expansion', title: 'Expansion Console', goto: 'expansion',
       lines: ['Expansion resets your run for permanent power. The payout depends on peak equity.', 'The button lights up once you have enough. Until then, grow.', 'Everything resets except what the Board decides to keep.'] },
+    // ---- prologue consoles (shown only while the prologue runs)
+    { id: 'b_pro_stand', when: ['pro', 'stand'], icon: 'scope', title: 'Test Stand', goto: 'pro_stand',
+      lines: ['Static fires burn a spare engine on the stand and pay out Data.', 'Weaker engines blow up more often. Blowing up pays more Data. This is considered a feature.', 'A Test Engineer (R&D) runs them without you.'] },
+    { id: 'b_pro_rd', when: ['pro', 'rd'], icon: 'research', title: 'R&D', goto: 'pro_rd',
+      lines: ['Spend Data on reliability, tooling and landing legs.', 'Reliability is per subsystem. A launch is only as good as its weakest part.', 'Every test also teaches the team a little, for free.'] },
+    { id: 'b_pro_launch', when: ['pro', 'launch'], icon: 'rocket', title: 'Launch Complex', goto: 'pro_launch',
+      lines: ['Assemble a vehicle from parts, then fly it. Four tiers: Hop, Suborbital, Orbit, Orbit and Recover.', 'The odds are the product of your reliabilities. Read them before you press the button.', 'A failed rocket is gone. Its Data is not.'] },
+    { id: 'b_pro_funding', when: ['pro', 'funding'], icon: 'contract', title: 'Funding', goto: 'pro_funding',
+      lines: ['Contracts ride along on a tier and pay on success. Grants are cash for having done something.', 'Investors appear as decision cards over the viewport. Two options, both with consequences.', 'The Board exists now. It lent you the money.'] },
+    { id: 'b_pro_workshop', when: ['proStaff', 'machinist'], icon: 'crew', title: 'Stock Targets', goto: 'pro_workshop',
+      lines: ['The machinist keeps the shelf stocked for the next rocket. Change the targets in Parts.', 'Spare parts feed static fires and the next tier. Clicking MACHINE PART still speeds up any running job.', 'Salary is paid per second. The machinist reads the contract carefully.'] },
+    { id: 'b_license', when: ['proCert'], icon: 'trophy', title: 'Mining License', goto: 'missions',
+      lines: ['The proof-of-concept rocket is now your first Prospector, flown by the founding pilot.', 'Reliability earned in the prologue gives it a small permanent safety bonus. Leftover Data became RP.', 'The Board has stopped asking whether this will work. It asks how much.'] },
     // ---- mechanics
     { id: 'b_pads', when: ['pads'], icon: 'pad', title: 'Launch Pads', goto: 'fleet',
       lines: ['Each pad flies one ship at a time. Extra ships wait their turn.', 'Build pads in Fleet. Each costs four times the last.', 'Ships queue. Revenue does not.'] },
@@ -735,6 +755,153 @@
     galaxy:     'The Milky Way is a solved problem. There are two trillion others.',
     nearEnd:    'Projections show one remaining market: everything.',
   };
+  // =====================================================================
+  // PROLOGUE: "Proof of Concept". Every tunable lives here (see docs/prologue.md).
+  // Times are seconds. Cash is the player's S.money. Data is S.pro.data.
+  // =====================================================================
+  AT.PROLOGUE = {
+    loan: 2000,                // starting cash
+    // ---- parts. clicks: hand-machining clicks per part. fabT: auto-fab job time. cost: materials, paid when work starts.
+    partOrder: ['airframe', 'engine', 'avionics'],
+    parts: {
+      airframe: { name: 'Airframe', clicks: 8,  fabT: 12, cost: 90, desc: 'Tanks, skin and a lot of welding.' },
+      engine:   { name: 'Engine',   clicks: 10, fabT: 18, cost: 200, desc: 'The part that is supposed to be on fire.' },
+      avionics: { name: 'Avionics', clicks: 8,  fabT: 14, cost: 140, desc: 'A flight computer, a radio and optimism.' },
+    },
+    click: { boost: 0.4 },       // seconds a click shaves off the running job
+    // ---- staff. One of each. Salary is cash per second. unlock: what reveals the hire button.
+    staff: {
+      machinist: { name: 'Machinist',     cost: 450, salary: 0.2, unlock: 'part', desc: 'Runs the lathe. Keeps parts in stock for the next rocket.' },
+      tester:    { name: 'Test Engineer', cost: 700, salary: 0.4,  unlock: 'r_tester', desc: 'Runs static fires on spare engines on their own.' },
+    },
+    bays: 1,                   // simultaneous jobs (fabricate, static fire, assemble) before R&D
+    // ---- static fire. killK * (1 - engine reliability) = chance the engine is destroyed.
+    fire: { T: 18, cost: 15, data: 6, dataBoom: 12, learn: 0.018, learnBoom: 0.03, killK: 0.45 },
+    // ---- reliability. rel = clamp(base + learned + R&D). learned per subsystem is capped.
+    rel: { base: { airframe: 0.75, engine: 0.72, avionics: 0.75 }, learnCap: 0.14, max: 0.985 },
+    attemptLearn: { ok: 0.012, fail: 0.025 },
+    pressureMult: 0.97,        // each point of Board pressure (investor deals) multiplies success odds
+    // ---- R&D. Cost in Data. fx keys: rel {sub: +n}, bays, fabMult, asmMult, dataMult, learnMult, attemptLearnMult, legs, tester.
+    rd: [
+      { id: 'r_welds',  name: 'Better Welds',          cost: 8,  req: [],           fx: { rel: { airframe: 0.05 } }, desc: 'Airframe reliability +5%.' },
+      { id: 'r_turbo',  name: 'Turbopump',             cost: 10, req: [],           fx: { rel: { engine: 0.05 } },   desc: 'Engine reliability +5%.' },
+      { id: 'r_fc',     name: 'Flight Computer',       cost: 8,  req: [],           fx: { rel: { avionics: 0.05 } }, desc: 'Avionics reliability +5%.' },
+      { id: 'r_tester', name: 'Test Engineer',         cost: 8,  req: [],           fx: { tester: 1 },               desc: 'Unlocks the Test Engineer, who runs static fires unattended.' },
+      { id: 'r_bay',    name: 'Second Bay',            cost: 14, req: [],           fx: { bays: 1 },                 desc: 'Two jobs at once. Someone removed a wall.' },
+      { id: 'r_lathe',  name: 'CNC Lathe',             cost: 16, req: [],           fx: { fabMult: 0.75 },           desc: 'Parts fabricate 25% faster.' },
+      { id: 'r_telem',  name: 'Telemetry Rig',         cost: 14, req: ['r_tester'], fx: { dataMult: 1.5, learnMult: 1.5 }, desc: 'Tests yield 50% more Data and teach 50% more.' },
+      { id: 'r_legs',   name: 'Landing Legs',          cost: 22, req: ['r_welds'],  fx: { legs: 1, rel: { airframe: 0.02 } }, desc: 'Required to recover a rocket from orbit. Airframe +2%.' },
+      { id: 'r_vab',    name: 'Assembly Jig',          cost: 20, req: ['r_bay'],    fx: { asmMult: 0.6 },            desc: 'Assembly takes 40% less time.' },
+      { id: 'r_sim',    name: 'Flight Simulator',      cost: 24, req: ['r_fc'],     fx: { attemptLearnMult: 1.5 },   desc: 'Launch attempts teach 50% more.' },
+      { id: 'r_welds2', name: 'Friction-Stir Welding', cost: 30, req: ['r_welds'],  fx: { rel: { airframe: 0.06 } }, desc: 'Airframe reliability +6%.' },
+      { id: 'r_turbo2', name: 'Staged Combustion',     cost: 36, req: ['r_turbo'],  fx: { rel: { engine: 0.07 } },   desc: 'Engine reliability +7%.' },
+      { id: 'r_fc2',    name: 'Redundant Avionics',    cost: 30, req: ['r_fc'],     fx: { rel: { avionics: 0.06 } }, desc: 'Avionics reliability +6%.' },
+    ],
+    // ---- launch tiers. parts: needed to assemble. assembleT/flightT: seconds. diff: odds multiplier. fee: launch cost.
+    // data/failData: Data on success/failure. recover: a success returns the parts to stock (else they are spent).
+    tiers: [
+      { id: 'hop',     name: 'Hop',               goal: '100 m up, 100 m down.',       parts: { airframe: 1, engine: 1, avionics: 1 }, assembleT: 10, flightT: 12, diff: 0.97, data: 6,  failData: 14, fee: 40,  reward: { cash: 400 },  recover: true,  needs: null,     ach: 'ACH_PRO_HOP' },
+      { id: 'sub',     name: 'Suborbital',        goal: 'Cross the Karman line.',      parts: { airframe: 1, engine: 2, avionics: 1 }, assembleT: 16, flightT: 18, diff: 0.93, data: 12, failData: 28, fee: 80,  reward: { cash: 1000 }, recover: false, needs: null,     ach: 'ACH_PRO_SUB' },
+      { id: 'orbit',   name: 'Orbit',             goal: 'Stay up. Go sideways, fast.', parts: { airframe: 2, engine: 3, avionics: 2 }, assembleT: 24, flightT: 26, diff: 0.88, data: 20, failData: 55, fee: 150, reward: { cash: 1800 }, recover: false, needs: null,     ach: 'ACH_PRO_ORBIT' },
+      { id: 'recover', name: 'Orbit and Recover', goal: 'Come back in one piece.',     parts: { airframe: 2, engine: 3, avionics: 2 }, assembleT: 30, flightT: 36, diff: 0.85, data: 0,  failData: 85, fee: 250, reward: { cash: 2500 }, recover: false, needs: 'r_legs', ach: 'ACH_PRO_RETURNED' },
+    ],
+    // ---- contracts: ride along on a tier's attempt. Offered once the tier before it is cleared (the Hop one at the start). Paid on success.
+    contracts: [
+      { id: 'c_cheese',  name: 'Dairy Payload',     client: 'Hollis Creamery',        tier: 0, reward: 350,  text: 'A creamery wants to know if cheese ages differently at 100 m. It does not.' },
+      { id: 'c_cubesat', name: 'Cubesat Ride',      client: 'State University',       tier: 1, reward: 1000, text: 'A university cubesat, 1 kg, with a request for a discount for "educational value".' },
+      { id: 'c_weather', name: 'Weather Satellite', client: 'Meridian Forecast Ltd.', tier: 2, reward: 1600, text: 'A weather satellite. It forecasts rain over the launch site every day, correctly.' },
+    ],
+    // ---- grants: one-off cash. cond: ['tier', id] cleared, or ['data', n] total Data collected.
+    grants: [
+      { id: 'g_state', name: 'Regional Innovation Grant', cash: 900, cond: ['tier', 'hop'], text: 'The region would like to be associated with things that go up.' },
+      { id: 'g_data',  name: 'Failure Analysis Grant',    cash: 1500, cond: ['data', 100],   text: 'A foundation funds the study of what went wrong. It has a lot of material.' },
+    ],
+    // ---- investor pitches: story cards, two options each. Pushed to S.pro.cards the first time a tier is cleared.
+    // fx: cash, data, pressure (Board pressure: odds x pressureMult each), ore (+RP at carry-over), learn (all subsystems).
+    pitches: [
+      { id: 'p_seed', after: 'hop', title: 'Seed Round', text: 'A fund wants in. The partner asks where this is going. Mars is the correct answer for the room.',
+        a: { label: 'Promise Mars', fx: { cash: 1200, pressure: 1 }, log: 'The deck now has a Mars slide. The Board pencilled in a date. The date is not in pencil on the schedule.' },
+        b: { label: 'Promise ore',  fx: { cash: 800, ore: 1 },      log: 'The deck now has an asteroid slide. The partner asked how heavy the rocks are. The question was fair.' } },
+      { id: 'p_angel', after: 'sub', title: 'The Angel', text: 'A private investor offers a cheque and a few opinions. The opinions come with a board seat.',
+        a: { label: 'Take the seat', fx: { cash: 1800, pressure: 1 }, log: 'The angel joined the Board. He asked for the launch schedule, then for a faster one.' },
+        b: { label: 'Keep control',  fx: { cash: 600, data: 10 },     log: 'The angel left. A competitor\'s intern left with a copy of your test data. You got something in return.' } },
+      { id: 'p_press', after: 'orbit', title: 'Press Day', text: 'A trade magazine offers a feature on the orbital launch. They want a countdown and a smile.',
+        a: { label: 'Livestream the next launch', fx: { cash: 1500, pressure: 1 }, log: 'The next attempt will be live. Nobody is allowed to say "scrub" on air.' },
+        b: { label: 'Quiet launch', fx: { learn: 0.01 }, log: 'No cameras. The crew was more careful. Nobody said it was because of the cameras.' } },
+      { id: 'p_sovereign', after: 'orbit', title: 'Sovereign Fund', text: 'A sovereign fund is reading the prospectus. It has two slides to choose from.',
+        a: { label: 'Colony prospectus', fx: { cash: 2000, pressure: 1 }, log: 'The fund liked the colony. The fund would like it by Q4.' },
+        b: { label: 'Mining prospectus', fx: { cash: 1000, ore: 2 },      log: 'The fund liked the margins. The fund asked about ore grades. You will need to learn about those.' } },
+    ],
+    // ---- the Board's current order: first unmet entry. cond: [type, arg]
+    goals: [
+      { text: 'Machine your first part. Click MACHINE PART.',            cond: ['made', 1] },
+      { text: 'Build one of each part: airframe, engine, avionics.',     cond: ['madeAll', 1] },
+      { text: 'Static-fire an engine on the test stand.',                cond: ['fires', 1] },
+      { text: 'Fly the Hop.',                                            cond: ['tier', 'hop'] },
+      { text: 'Fly Suborbital. Cross the Karman line.',                  cond: ['tier', 'sub'] },
+      { text: 'Reach orbit.',                                            cond: ['tier', 'orbit'] },
+      { text: 'Orbit and recover the vehicle. Earn the mining license.', cond: ['tier', 'recover'] },
+    ],
+    // ---- carry-over into the main game
+    carry: {
+      cash: 400,               // starting cash (the Prospector is already owned)
+      cashShare: 0.25, cashCap: 600,   // share of leftover cash that follows, and its cap
+      rpPerData: 1, rpPerOre: 25, rpCap: 80,
+      bonusRef: 0.80, bonusK: 0.6, bonusMax: 0.12,  // Prospector bonus = clamp((avg reliability - ref) * k, 0, max): risk -bonus, cargo +bonus
+      rocketName: 'ATS Proof of Concept',
+      skip: { rel: 0.85, data: 20, ore: 0 },        // baseline carry-over when the prologue is skipped
+    },
+    safety: { loan: 800, below: 300, max: 5 },     // emergency loan when the company is stuck without cash
+    // ---- story log (E.say keys)
+    story: {
+      pro_start:    'Hangar 3, leased by the month. One lathe, one loan, one idea that the bank called "ambitious".',
+      pro_click:    'The lathe works. The noise is the second thing you notice. The smell is the first.',
+      pro_part1:    'First part machined. It is slightly out of tolerance. So is everything else here.',
+      pro_madeall:  'One of each: airframe, engine, avionics. The bank calls this "asset formation".',
+      pro_machinist:'A machinist was hired. She read the lathe manual, then the loan agreement. She stayed anyway.',
+      pro_auto:     'The lathe runs on its own now. Someone should check on it. Nobody does.',
+      pro_stand:    'The test stand is bolted to the hangar floor. The hangar is not bolted to anything.',
+      pro_fire1:    'First static fire. Eighteen seconds of controlled disagreement with the laws of physics.',
+      pro_data:     'Telemetry arrives. The engineers call it Data. The accountants call it a cost.',
+      pro_boomfire: 'The engine did not survive the test. The test stand did. Nobody is certain how.',
+      pro_rd:       'R&D has a budget line now. It also has a whiteboard. The whiteboard is doing most of the work.',
+      pro_tester:   'A test engineer is on payroll. Their first request was a longer fence.',
+      pro_bay2:     'A second bay is open. The second bay is the first bay, with a wall removed.',
+      pro_fire5:    'Five static fires. The neighbors can now identify the engine by sound.',
+      pro_data50:   'Fifty Data. The Board asked what Data is. It was explained that Data is what is left when the rocket is not.',
+      pro_data100:  'One hundred Data. A foundation has noticed. Foundations notice exactly this.',
+      pro_asm1:     'First assembly. The rocket stands up on its own. The crew applauds, then steps back.',
+      pro_hop_go:   'The hop is scheduled. The neighbors have been notified. Two replied.',
+      pro_hop_ok:   'Hop complete. One hundred metres up, one hundred metres down, zero metres of apology.',
+      pro_board:    'A Board of Directors has been appointed. It consists of the people who lent you the money.',
+      pro_grant:    'A grant arrived. The envelope was thicker than the grant.',
+      pro_contract: 'A client wants a payload on the next rocket. Insurance has asked that you not mention this to the insurer.',
+      pro_fail1:    'The vehicle performed a rapid unscheduled disassembly. Data collected: substantial.',
+      pro_fail2:    'Another rocket, another crater. The Board has started referring to the crater as "the asset".',
+      pro_sub_ok:   'Suborbital. Past the Karman line for four minutes, on a budget the Board described as "touching".',
+      pro_pitch:    'An investor is in the lobby. He asked to see the roadmap. You showed him the hangar.',
+      pro_legs:     'Landing legs approved. They were not in the original design. Neither was landing.',
+      pro_orbit_ok: 'Orbit. For ninety minutes at a time, AstroTech is above everyone.',
+      pro_recover:  'The Board wants the rocket back. It is the only one we have.',
+      pro_pressure: 'The Board has moved the schedule up. The schedule did not bring the budget with it.',
+      pro_broke:    'The bank extended the loan. The terms were not discussed.',
+      pro_ore:      'Slide 14 now says "Asteroid prospects". Slide 15 says "Margins".',
+      pro_license:  'The Board has certified the vehicle. A mining license has been issued. Nobody asked what is being mined.',
+      pro_end:      'AstroTech Mining Co. Est. 2187.',
+      pro_skip:     'The Board waived the proof of concept. It had already seen one.',
+    },
+    // random flavor lines
+    lines: {
+      fireOk:   ['Static fire nominal. The stand is still standing.', 'The engine ran its full burn. The data was boring, which is the best kind.', 'Burn complete. The engine is warm and so is the crew.'],
+      fireBoom: ['The engine came apart on the stand. Data collected.', 'Static fire ended early and loudly.', 'Chamber pressure exceeded expectations, then the chamber.'],
+      fail: {
+        airframe: ['The airframe failed at max-Q. The Board has asked for a definition of max-Q.', 'The tank wall did not hold. Neither did the schedule.'],
+        engine:   ['The engine shut down early. It was not consulted.', 'An engine let go at altitude. Debris is expected at several locations.'],
+        avionics: ['The flight computer lost the plot, then the rocket.', 'Avionics reported all nominal. The rocket disagreed.'],
+      },
+    },
+  };
+
   AT.ENDING = [
     'There are no more buyers.',
     'There are no more sellers.',
@@ -787,5 +954,15 @@
     { id: 'ACH_ALL_RESEARCH',  name: 'Total Knowledge',      desc: 'Complete every research node in one run.' },
     { id: 'ACH_END',           name: 'The Last Transaction', desc: 'Finish the game.' },
     { id: 'ACH_NGPLUS',        name: 'Again',                desc: 'Start a new universe.' },
+    { id: 'ACH_PRO_PART',      name: 'Garage Startup',       desc: 'Machine your first part by hand.' },
+    { id: 'ACH_PRO_FIRE',      name: 'Hot Fire',             desc: 'Complete a static fire.' },
+    { id: 'ACH_PRO_RUD',       name: 'Rapid Unscheduled Disassembly', desc: 'Lose an engine or a rocket to a test.' },
+    { id: 'ACH_PRO_DATA',      name: 'Failure Is Data',      desc: 'Collect 100 Data in the prologue.' },
+    { id: 'ACH_PRO_HOP',       name: 'Hop Skip',             desc: 'Complete the Hop.' },
+    { id: 'ACH_PRO_SUB',       name: 'Edge of Space',        desc: 'Cross the Karman line.' },
+    { id: 'ACH_PRO_ORBIT',     name: 'Orbit',                desc: 'Reach orbit.' },
+    { id: 'ACH_PRO_RETURNED',  name: 'Returned',             desc: 'Bring an orbital rocket back in one piece. Earn the mining license.' },
+    { id: 'ACH_PRO_CLEAN',     name: 'Nominal',              desc: 'Earn the mining license without losing a single rocket.' },
+    { id: 'ACH_PRO_FAST',      name: 'Fast Track',           desc: 'Earn the mining license in under 15 minutes.' },
   ];
 })(typeof window !== 'undefined' ? (window.AT = window.AT || {}) : (globalThis.AT = globalThis.AT || {}));

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Screenshots the quick-start tutorial (every step, on a fresh save), a briefing card and the Field Manual.
+"""Screenshots the prologue coach marks (fresh save), the mining tutorial (a save whose prologue was skipped), a briefing card and the Field Manual.
 
 usage: node tools/build.mjs && python3 tools/shot_tutorial.py <outdir> [width=1366] [height=800] [textSize=large] [--demo]
 Also asserts the behaviour: steps advance on the player's own actions, the overlay never blocks clicks,
 old saves skip the tutorial and are not spammed with briefings, and the Field Manual / settings work.
 """
-import sys, os, pathlib, json
+import sys, os, pathlib, json, subprocess
 from playwright.sync_api import sync_playwright
 
 root = pathlib.Path(__file__).resolve().parent.parent
@@ -16,6 +16,7 @@ W = int(args[1]) if len(args) > 1 else 1366
 H = int(args[2]) if len(args) > 2 else 800
 TEXT = args[3] if len(args) > 3 else 'large'
 url = ((root / 'dist/demo/astrotech-demo.html') if DEMO else (root / 'steam/game/index.html')).as_uri()
+SAVEKEY = 'astrotech.demo.save.v2' if DEMO else 'astrotech.save.v2'
 errors, problems = [], []
 tag = f'{W}x{H}_{TEXT}'
 
@@ -27,12 +28,17 @@ def check(cond, msg):
 with sync_playwright() as p:
     exe = os.environ.get('CHROMIUM_PATH') or ('/opt/pw-browsers/chromium' if pathlib.Path('/opt/pw-browsers/chromium').exists() else None)
     b = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
-    pg = b.new_page(viewport={'width': W, 'height': H})
-    pg.on('console', lambda m: errors.append(f'{m.type}: {m.text}') if m.type == 'error' else None)
-    pg.on('pageerror', lambda e: errors.append(f'pageerror: {e}'))
-    pg.goto(url); pg.wait_for_timeout(1200)
-    pg.evaluate("t => { AT.E.S.settings.textSize = t; document.documentElement.dataset.text = t; }", TEXT)
-    pg.wait_for_timeout(400)
+    skip_save = subprocess.check_output(['node', str(root / 'tools/skipsave.js'), 'tutorial'], text=True)
+
+    def new_page(save=None):
+        pg = b.new_page(viewport={'width': W, 'height': H})
+        pg.on('console', lambda m: errors.append(f'{m.type}: {m.text}') if m.type == 'error' else None)
+        pg.on('pageerror', lambda e: errors.append(f'pageerror: {e}'))
+        if save: pg.add_init_script("try { if (!localStorage.getItem('%s')) localStorage.setItem('%s', %s); } catch (e) {}" % (SAVEKEY, SAVEKEY, json.dumps(save)))
+        pg.goto(url); pg.wait_for_timeout(1200)
+        pg.evaluate("t => { AT.E.S.settings.textSize = t; document.documentElement.dataset.text = t; }", TEXT)
+        pg.wait_for_timeout(400)
+        return pg
 
     def shot(name):
         pg.wait_for_timeout(350)
@@ -54,44 +60,81 @@ with sync_playwright() as p:
             overlap = not (pr_ <= fl or pl >= fr_ or pb <= ft or pt >= fb)
             check(big or not overlap, f'{name}: panel overlaps its target {r}')
 
+    # ================= A. the prologue coach (fresh save) =================
+    pg = new_page()
+    check(step() == 'pro', 'a fresh game should be in the prologue (tutorial state "pro")')
+    check('MACHINE' in panel_text(), 'coach 1 should point at MACHINE PART')
+    frame_ok('p1'); shot('p1_machine_part')
+    # the overlay never blocks the click it asks for
+    for i in range(40):
+        if pg.evaluate('AT.E.proMade()') >= 1: break
+        pg.click('#tabbody [data-act=pro-click]'); pg.wait_for_timeout(100)
+    pg.wait_for_timeout(300)
+    check(pg.evaluate('AT.E.proMade()') >= 1, 'clicking MACHINE PART should machine a part')
+    check('MACHINIST' in panel_text().upper(), 'coach 2 should ask for a machinist')
+    frame_ok('p2'); shot('p2_hire_machinist')
+    pg.click('#tabbody [data-act=pro-hire][data-arg=machinist]'); pg.wait_for_timeout(400)
+    check(pg.evaluate('AT.E.S.pro.staff.machinist') == 1, 'HIRE should hire the machinist')
+    check('TEST STAND' in panel_text().upper(), 'coach 3 should send the player to the TEST STAND')
+    frame_ok('p3a'); shot('p3a_open_stand')
+    pg.click('#tabs [data-arg=pro_stand]'); pg.wait_for_timeout(400)
+    check('STATIC FIRE' in panel_text().upper(), 'coach 3 should point at STATIC FIRE once in the stand')
+    frame_ok('p3b'); shot('p3b_static_fire')
+    pg.evaluate('AT.E.simulate(40)'); pg.wait_for_timeout(500)   # the machinist finishes the bay
+    pg.click('#tabbody [data-act=pro-fire]'); pg.wait_for_timeout(400)
+    check(pg.evaluate("AT.E.S.pro.jobs.some(j => j.kind === 'fire')"), 'STATIC FIRE should start a fire job')
+    pg.wait_for_timeout(600)
+    check('STATIC FIRE' not in panel_text().upper(), 'the static-fire coach should step aside while the engine burns')
+    pg.evaluate('AT.E.simulate(25)'); pg.wait_for_timeout(500)
+    check(pg.evaluate('AT.E.S.pro.stats.fires') >= 1, 'the static fire should complete')
+    pg.evaluate('AT.E.simulate(40)'); pg.wait_for_timeout(500)   # parts for the hop
+    for i in range(8):   # briefings first, then the coach
+        if pg.locator('#briefing').count(): pg.click('#briefing [data-act=brief-ok]'); pg.wait_for_timeout(600)
+    check('LAUNCH' in panel_text().upper(), 'coach 4 should point at the Launch console')
+    frame_ok('p4a'); shot('p4a_open_launch')
+    pg.click('#tabs [data-arg=pro_launch]'); pg.wait_for_timeout(400)
+    check('ASSEMBLE' in panel_text().upper(), 'coach 4 should point at ASSEMBLE in the Launch console')
+    frame_ok('p4b'); shot('p4b_assemble')
+    pg.click('#tabbody [data-coach=launch]'); pg.wait_for_timeout(500)
+    check(pg.locator('.tut-panel').count() == 0, 'the coach should be done once the first assembly starts')
+    shot('p5_coach_done')
+    pg.close()
+
+    # ================= B. the mining tutorial (prologue skipped) =================
+    pg = new_page(skip_save)
     # ---- 0. welcome -----------------------------------------------------
-    check(step() == 0, 'fresh save should start at tutorial step 0')
+    check(step() == 0, 'a skipped prologue should start the mining tutorial at step 0')
+    check(pg.evaluate('AT.E.S.ships.length') == 1, 'the proof-of-concept rocket should already be a Prospector')
     check(DEMO or pg.locator('#briefing').count() == 0, 'no briefing during the tutorial')
+    check('Four clicks' not in panel_text() and 'ore' in panel_text().lower(), 'welcome text should be the new one')
     shot('t0_welcome')
     pg.click('[data-act=tut-next]'); pg.wait_for_timeout(300)
-    check(step() == 1, 'LET\'S GO should advance to step 1')
-    # ---- 1. fleet -------------------------------------------------------
-    check('FLEET' in panel_text(), 'step 1 should ask for the Fleet console first')
-    frame_ok('t1a'); shot('t1a_open_fleet')
-    pg.click('#tabs [data-arg=fleet]'); pg.wait_for_timeout(400)
-    check('PROSPECTOR' in panel_text(), 'step 1 should point at the Prospector once in Fleet')
-    frame_ok('t1b'); shot('t1b_buy_prospector')
-    pg.click('[data-act=buyship][data-arg=prospector]'); pg.wait_for_timeout(400)
-    check(step() == 2, 'buying the Prospector should advance to step 2')
-    # ---- 2. missions ----------------------------------------------------
-    frame_ok('t2a'); shot('t2a_open_missions')
+    check(step() == 1, "LET'S GO should advance to the launch step (there is no fleet step any more)")
+    # ---- 1. missions ----------------------------------------------------
+    check('MISSION' in panel_text().upper(), 'step 1 should ask for the Missions console')
+    frame_ok('t1a'); shot('t1a_open_missions')
     pg.click('#tabs [data-arg=missions]'); pg.wait_for_timeout(400)
-    check('LAUNCH' in panel_text(), 'step 2 should point at LAUNCH')
-    frame_ok('t2b'); shot('t2b_launch')
+    check('LAUNCH' in panel_text(), 'step 1 should point at LAUNCH')
+    frame_ok('t1b'); shot('t1b_launch')
     pg.click('#tabbody .tcard [data-act=launch] >> nth=0'); pg.wait_for_timeout(2500)
-    check(step() == 3, 'launching should advance to step 3')
-    # ---- 3. flight ------------------------------------------------------
-    frame_ok('t3'); shot('t3_flight')
+    check(step() == 2, 'launching should advance to the flight step')
+    # ---- 2. flight ------------------------------------------------------
+    frame_ok('t2'); shot('t2_flight')
     pg.evaluate('AT.E.simulate(40)'); pg.wait_for_timeout(600)
     lost = pg.evaluate('AT.E.S.stats.losses') > 0
     if lost:
         print('mission was lost; tutorial should loop back')
-        check(step() == 2, 'a lost ship should send the tutorial back to the launch step')
+        check(step() == 1, 'a lost ship should send the tutorial back to the launch step')
     else:
-        check(step() == 4, 'landing should advance to step 4')
-        # ---- 4. market --------------------------------------------------
-        frame_ok('t4a'); shot('t4a_open_market')
+        check(step() == 3, 'landing should advance to the market step')
+        # ---- 3. market --------------------------------------------------
+        frame_ok('t3a'); shot('t3a_open_market')
         pg.click('#tabs [data-arg=market]'); pg.wait_for_timeout(400)
-        check('SELL' in panel_text(), 'step 4 should point at SELL EVERYTHING')
-        frame_ok('t4b'); shot('t4b_sell')
+        check('SELL' in panel_text(), 'step 3 should point at SELL EVERYTHING')
+        frame_ok('t3b'); shot('t3b_sell')
         pg.click('[data-act=sellall]'); pg.wait_for_timeout(400)
-        check(step() == 5, 'selling should advance to the wrap-up')
-        frame_ok('t5'); shot('t5_done')
+        check(step() == 4, 'selling should advance to the wrap-up')
+        frame_ok('t4'); shot('t4_done')
         pg.click('[data-act=tut-next]'); pg.wait_for_timeout(300)
         check(step() == 'done', 'GOT IT should finish the tutorial')
         check(pg.locator('#tut').count() == 0, 'overlay should be removed when done')
@@ -148,18 +191,19 @@ with sync_playwright() as p:
     if not DEMO:
         old = pg.evaluate("""() => { const E = AT.E, S = E.S; S.money = 5e7; S.rp = 5e4; S.earnedTotal = 1e8; S.earnedRun = 1e8; S.stats.oreMined = 1e5; S.peakEquity = 5e7;
           for (const r of AT.RESEARCH.filter(r => r.region === 0 && r.cost < 5000)) S.research[r.id] = 1; E.touch(); E.simulate(5);
-          const j = JSON.parse(E.save()); delete j.tutorial; delete j.tutBase; delete j.briefingsSeen; return JSON.stringify(j); }""")
+          const j = JSON.parse(E.save()); delete j.tutorial; delete j.tutBase; delete j.briefingsSeen; delete j.pro; delete j.prologueDone; return JSON.stringify(j); }""")
         # a fresh page, so the old page's save-on-unload cannot overwrite the planted save
         pg = b.new_page(viewport={'width': W, 'height': H})
         pg.on('pageerror', lambda e: errors.append(f'pageerror: {e}'))
         pg.add_init_script("try { localStorage.setItem('astrotech.save.v2', %s); } catch (e) {}" % json.dumps(old))
         pg.goto(url); pg.wait_for_timeout(1500)
         check(step() == 'done', 'an old save should count the tutorial as done')
+        check(pg.evaluate('AT.E.proActive()') is False, 'an old save (no prologue fields) should count the prologue as done')
         pg.wait_for_timeout(1000)
         check(pg.locator('#briefing').count() == 0, 'an old save must not be spammed with briefings for features it already has')
         check(pg.evaluate('Object.keys(AT.E.S.briefingsSeen).length') >= 8, 'an old save should have its unlocked briefings marked seen')
         pg.click('#tabs [data-arg=archive]'); pg.wait_for_timeout(400)
-        check(pg.locator('.man:not(.locked)').count() >= 8, 'Field Manual should list the veteran\'s unlocked entries')
+        check(pg.locator('.man:not(.locked)').count() >= 8, "Field Manual should list the veteran's unlocked entries")
     b.close()
 
 print('PROBLEMS:' if problems else 'checks ok', json.dumps(problems, indent=1) if problems else '')

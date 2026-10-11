@@ -42,3 +42,13 @@ Create these in Steamworks under **App Admin → Stats & Achievements → Achiev
 | `ACH_ALL_RESEARCH` | Total Knowledge | Complete every research node in one run. |
 | `ACH_END` | The Last Transaction | Finish the game. |
 | `ACH_NGPLUS` | Again | Start a new universe. |
+| `ACH_PRO_PART` | Garage Startup | Machine your first part by hand. |
+| `ACH_PRO_FIRE` | Hot Fire | Complete a static fire. |
+| `ACH_PRO_RUD` | Rapid Unscheduled Disassembly | Lose an engine or a rocket to a test. |
+| `ACH_PRO_DATA` | Failure Is Data | Collect 100 Data in the prologue. |
+| `ACH_PRO_HOP` | Hop Skip | Complete the Hop. |
+| `ACH_PRO_SUB` | Edge of Space | Cross the Karman line. |
+| `ACH_PRO_ORBIT` | Orbit | Reach orbit. |
+| `ACH_PRO_RETURNED` | Returned | Bring an orbital rocket back in one piece. Earn the mining license. |
+| `ACH_PRO_CLEAN` | Nominal | Earn the mining license without losing a single rocket. |
+| `ACH_PRO_FAST` | Fast Track | Earn the mining license in under 15 minutes. |

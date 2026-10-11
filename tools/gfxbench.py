@@ -1,5 +1,5 @@
 # Close-up render benchmark + screenshots. usage: gfxbench.py <outdir> <prefix> [bench|shots|both]
-import sys, os, pathlib, json
+import sys, os, pathlib, json, subprocess
 from playwright.sync_api import sync_playwright
 root = pathlib.Path(__file__).resolve().parent.parent
 out = pathlib.Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
@@ -14,6 +14,8 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={'width': 1920, 'height': 1080})
     pg.on('pageerror', lambda e: errors.append(f'pageerror: {e}'))
     pg.on('console', lambda m: errors.append(f'{m.type}: {m.text}') if m.type == 'error' else None)
+    # the close-up needs the mining game: start from a save whose prologue was skipped
+    pg.add_init_script("try { if (!localStorage.getItem('astrotech.save.v2')) localStorage.setItem('astrotech.save.v2', %s); } catch (e) {}" % json.dumps(subprocess.check_output(['node', str(root / 'tools/skipsave.js')], text=True)))
     pg.goto(url); pg.wait_for_timeout(1200)
     pg.evaluate("""() => { const E=AT.E, S=E.S; S.money=5e7; S.rp=5e4; E.touch();
       window.__tg = {}; for (const c of ['S','KC','KB','OC','SY','SN','GS','GQ']) { const reg=AT.CLASSES[c].region; const t=E.genTarget(reg,c,{surveyed:true}); S.targets.push(t); window.__tg[c]=t.id; }

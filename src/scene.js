@@ -462,6 +462,8 @@
     g.fillStyle = sky.dark > 0.5 ? '#262a36' : '#8a8a80'; g.fillRect(seaW + 10, apronY, W, H - apronY);
     g.fillStyle = sky.dark > 0.5 ? '#1c1f28' : '#6a6a62';
     for (let x = seaW + 12; x < W; x += 9) g.fillRect(x, apronY + 1, 1, H - apronY);
+    // the prologue draws its own site (src/prologue_scene.js): a bare lot instead of the company's spaceport
+    if (AT.E.proActive() && SC.proDraw) { SC.proDraw({ g, W, H, MU, t, dt, sky, horizon, apronY, seaW, dark: sky.dark > 0.5 }); return; }
     // fuel farm and the company building
     const tx0 = Math.round(W * 0.8);
     for (let k = 0; k < 2; k++) { R.disc(g, tx0 + k * 12, horizon + 7, 5, '#0a0f26'); R.disc(g, tx0 + k * 12, horizon + 7, 4, sky.dark > 0.5 ? '#3a3e4a' : '#e8e8e8'); g.fillStyle = sky.dark > 0.5 ? '#2a2e38' : '#b8b8c0'; g.fillRect(tx0 + k * 12 + 1, horizon + 6, 3, 4); }

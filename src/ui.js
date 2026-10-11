@@ -8,6 +8,19 @@
   // Demo saves use their own key so they never overwrite a full-game save. The export format is identical.
   const SAVE_KEY = DEMO ? 'astrotech.demo.save.v2' : 'astrotech.save.v2';
   const native = DEMO ? null : (window.astrotechNative || null);
+  // Device flag: the prologue has been completed (or skipped) on this machine. Only then may a new game skip it.
+  const PRO_FLAG = DEMO ? 'astrotech.demo.prologueDone' : 'astrotech.prologueDone';
+  function readDeviceFlag() {
+    try { if (localStorage.getItem(PRO_FLAG) === '1') return true; } catch (e) { /* storage unavailable */ }
+    try { if (native && native.flag && native.flag('prologueDone') === '1') return true; } catch (e) { /* no bridge */ }
+    return false;
+  }
+  function writeDeviceFlag() {
+    E.proDevice(true);
+    try { localStorage.setItem(PRO_FLAG, '1'); } catch (e) { /* storage unavailable */ }
+    try { if (native && native.flag) native.flag('prologueDone', '1'); } catch (e) { /* no bridge */ }
+  }
+  const proOn = () => !!(AT.proUI && E.S && E.proActive());
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   AT.reducedMotion = typeof matchMedia === 'function' && !!matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -36,6 +49,7 @@
     { id: 'archive', label: 'Archive', short: 'Archive', icon: 'book', group: 'Progress' },
   ];
   function updateReveal() {
+    if (proOn()) return; // the prologue has its own consoles (prologue_ui.js)
     const S = E.S, R = S.reveal, M = E.mults();
     const rev = (id, cond) => {
       if (!R[id] && cond) {
@@ -95,15 +109,14 @@
     return b;
   }
   function renderTabs() {
-    const S = E.S, M = E.mults(), dtab = directiveTab();
-    const worn = !M.flags.autorepair && S.ships.some((x) => x.state === 'idle' && x.cond < 0.6);
-    const badges = navBadges(S, M);
+    const S = E.S, M = E.mults(), pro = proOn(), dtab = pro ? AT.proUI.hint() : directiveTab();
+    const worn = !pro && !M.flags.autorepair && S.ships.some((x) => x.state === 'idle' && x.cond < 0.6);
+    const badges = pro ? AT.proUI.badges() : navBadges(S, M);
     // the pulse means "act here now": a research directive only pulses while a node is actually affordable
     const actionable = (id) => id !== 'research' || !!badges.research;
     const hintOn = (id) => (id === dtab && actionable(id)) || (worn && id === 'fleet');
     let html = '', group = '', key = 0;
-    for (const t of TABS) {
-      if (!S.reveal[t.id]) continue;
+    for (const t of tabList()) {
       if (t.group !== group) { group = t.group; html += `<div class="rail-g" role="presentation">${group}</div>`; }
       key++;
       const k = key === 10 ? '0' : key <= 9 ? String(key) : '';
@@ -115,7 +128,9 @@
     const nav = $('#tabs');
     if (nav._html !== html) { nav.innerHTML = html; nav._html = html; }
   }
-  function navKeys() { return TABS.filter((t) => E.S.reveal[t.id]).map((t) => t.id); }
+  function tabList() { return proOn() ? AT.proUI.tabs() : TABS.filter((t) => E.S.reveal[t.id]); }
+  function navKeys() { return tabList().map((t) => t.id); }
+  const tabValid = (id) => (proOn() ? AT.proUI.has(id) : !!E.S.reveal[id]);
 
   // =====================================================================
   // BINDER
@@ -138,7 +153,7 @@
   }
   function render() {
     const S = E.S, M = E.mults();
-    if (!S.reveal[tab]) tab = 'missions';
+    if (!tabValid(tab) || !PANELS[tab]) tab = proOn() ? 'pro_workshop' : 'missions';
     const T = PANELS[tab];
     const s = tab + '|' + T.sig(S, M);
     const body = $('#tabbody');
@@ -176,6 +191,7 @@
   // PANELS
   // =====================================================================
   const PANELS = {};
+  UI.PANELS = PANELS;
 
   // ----------------------------- MISSIONS -----------------------------
   function bestFor(t, M) {
@@ -936,7 +952,7 @@
 
   // ----------------------------- ARCHIVE -----------------------------
   PANELS.archive = {
-    sig(S) { return Object.keys(S.ach).length + '|' + Object.keys(S.artifacts).length + '|' + S.memorial.length + '|' + S.dirIdx + '|' + AT.guide.manualSig(S); },
+    sig(S) { return Object.keys(S.ach).length + '|' + Object.keys(S.artifacts).length + '|' + S.memorial.length + '|' + S.dirIdx + '|' + AT.guide.manualSig(S) + '|' + (S.pro && S.pro.cert ? 1 : 0); },
     build(S) {
       const co = S.settings.collapsed = S.settings.collapsed || {};
       // Long reference sections start folded so the page is short by default. Directives, manual and artifacts stay open.
@@ -949,6 +965,13 @@
       else dirs += '<p class="empty">All board directives complete.</p>';
       for (let i = i0 + 1; i <= i0 + 2 && i < n; i++) dirs += `<div class="dir"><b>${i + 1}</b><span>Classified.</span></div>`;
       h += sect('archive:directives', 'Board directives', { count: `${i0}/${n}` }, dirs + '</div>');
+      // The prologue's record (S.pro.cert): the proof of concept, or the waiver that replaced it
+      if (S.pro && S.pro.cert) {
+        const c = S.pro.cert;
+        h += sect('archive:pro', 'Proof of concept', {}, c.skipped
+          ? '<p class="note">The prologue was waived. The Board had already seen one.</p>'
+          : `<p class="note">${esc(c.name || '')} earned the mining license in ${AT.fmtTime(c.time)}: ${c.attempts} launch attempts, ${c.fails} lost, average reliability ${pct(c.relAvg)}. ${fmt(c.dataLeft)} Data became ${fmt(c.rp)} RP${c.bonus > 0.0005 ? ' and a permanent ' + Math.round(c.bonus * 100) + '% safety bonus on the Prospector' : ''}.</p>`);
+      }
       // Field manual: the guide renders its own heading and count, so lift the count into a note and keep the list.
       const fm = AT.guide.manualHTML(S);
       const sub = (fm.match(/<span class="sub">([^<]*)<\/span>/) || [])[1] || '';
@@ -1011,6 +1034,7 @@
         </div>
         <div class="set-sect">SAVE DATA</div><div class="list">
           <div class="slot spread"><span>Save, back up or restore</span><div class="seg">${sg('save', 0, 'set_save')}${sg('export', 0, 'set_export')}${sg('import', 0, 'set_import')}${btn('reset', 0, 'bad', 'set_reset')}</div></div>
+          <div class="slot spread"><span>Prologue</span><div class="seg">${btn('newpro', 0, '', 'set_newpro')}${btn('replaypro', 0, '', 'set_replaypro')}</div></div>
           ${native && native.quit ? `<div class="slot spread"><span>Exit to desktop</span>${btn('quit', 0, 'bad', 'set_quit')}</div>` : ''}
         </div>
         <p class="note">AstroTech saves every 15 seconds${native ? ' and syncs through Steam Cloud' : ' in this browser'}. Fonts: Silkscreen and VT323 (SIL Open Font License). Keys: 1-0 open consoles, [ ] switch the viewport, A opens Activity, Esc closes.</p>`;
@@ -1024,7 +1048,7 @@
         set_ts_normal: { t: 'NORMAL', cls: { on: st.textSize === 'normal' } }, set_ts_large: { t: 'LARGE', cls: { on: st.textSize === 'large' } }, set_ts_xl: { t: 'XL', cls: { on: st.textSize === 'xl' } },
         set_gfx_low: { t: 'LOW', cls: { on: st.gfx === 'low' } }, set_gfx_high: { t: 'HIGH', cls: { on: st.gfx === 'high' } }, set_gfx_ultra: { t: 'ULTRA', cls: { on: st.gfx === 'ultra' } },
         set_hc: { t: st.highContrast ? 'ON' : 'OFF', cls: { on: !!st.highContrast } }, set_rm: { t: st.reduceMotion ? 'ON' : 'OFF', cls: { on: !!st.reduceMotion } },
-        set_confirm: { t: st.noConfirm ? 'OFF' : 'ON', cls: { on: !st.noConfirm } }, set_fs: { t: 'FULLSCREEN' }, set_save: { t: 'SAVE NOW' }, set_export: { t: 'EXPORT' }, set_import: { t: 'IMPORT' }, set_reset: { t: 'WIPE SAVE' }, set_quit: { t: 'QUIT' } };
+        set_confirm: { t: st.noConfirm ? 'OFF' : 'ON', cls: { on: !st.noConfirm } }, set_fs: { t: 'FULLSCREEN' }, set_save: { t: 'SAVE NOW' }, set_export: { t: 'EXPORT' }, set_import: { t: 'IMPORT' }, set_reset: { t: 'WIPE SAVE' }, set_newpro: { t: 'NEW GAME (WITH PROLOGUE)' }, set_replaypro: { t: 'REPLAY PROLOGUE' }, set_quit: { t: 'QUIT' } };
       for (const r of [0.1, 0.2, 0.35, 0.5]) v['air_' + Math.round(r * 100)] = { t: Math.round(r * 100) + '%', cls: { on: Math.abs(S.aiRisk - r) < 0.001 } };
       return v;
     },
@@ -1067,6 +1091,7 @@
     return safe || best;
   }
   function renderDeck() {
+    if (proOn()) { AT.proUI.renderDeck($('#deck')); return; }
     const S = E.S, M = E.mults(), box = $('#deck');
     const flights = [];
     for (const m of S.missions) { const sh = E.shipById(m.ship), t = E.targetById(m.target); if (sh && t) flights.push({ k: 'm', id: m.id, m, sh, t, left: m.T - m.t }); }
@@ -1200,7 +1225,15 @@
 
   // board order pill (top bar)
   function renderDirective() {
-    const S = E.S, d = E.directive(), el = $('#directive'), n = AT.DIRECTIVES.length;
+    const el = $('#directive');
+    if (proOn()) {
+      const pd = AT.proUI.directive();
+      if (el._h !== pd.html) { el._h = pd.html; el.innerHTML = pd.html; el.classList.remove('done'); el.dataset.tip = 'txt:' + pd.tip; }
+      el.dataset.arg = pd.tab;
+      return;
+    }
+    el.dataset.arg = 'archive';
+    const S = E.S, d = E.directive(), n = AT.DIRECTIVES.length;
     const html = d ? `<span class="dp-k">BOARD ORDER</span><b class="dp-n">${S.dirIdx + 1}/${n}</b><span class="dp-t">${esc(d.text)}</span><span class="dp-bar"><i style="width:${Math.round(S.dirIdx / n * 100)}%"></i></span>`
       : `<span class="dp-k">BOARD ORDERS</span><span class="dp-t">ALL COMPLETE</span><span class="dp-bar"><i style="width:100%"></i></span>`;
     if (el._h !== html) {
@@ -1211,6 +1244,7 @@
 
   // decision cards
   function renderCard() {
+    if (proOn()) { AT.proUI.renderCard($('#cardbox')); return; }
     const S = E.S, box = $('#cardbox');
     const c = S.cards[0];
     const s = c ? c.type + c.id + (c.ctx ? c.ctx.pilot : '') + S.cards.length : '';
@@ -1243,6 +1277,15 @@
   // viewport bar
   function renderViewBar() {
     const S = E.S;
+    const seg = $('#vbar .segctl'), vr = $('#vregs');
+    if (proOn()) {
+      if (!seg.hidden) seg.hidden = true;
+      if (AT.scene.getView() !== 'launch') AT.scene.setView('launch');
+      const h = '<span class="tog">HANGAR 3 · LAUNCH COMPLEX</span>';
+      if (vr._h !== h) { vr.innerHTML = h; vr._h = h; }
+      return;
+    }
+    if (seg.hidden) seg.hidden = false;
     const v = AT.scene.getView();
     for (const b of $$('#vbar [data-act="view"]')) b.classList.toggle('on', b.dataset.arg === v);
     const regs = $('#vregs');
@@ -1256,6 +1299,21 @@
   function setText(sel, t) { const el = $(sel); if (el && el.textContent !== t) el.textContent = t; }
   function updateTop() {
     const S = E.S, M = E.mults();
+    const dc = $('#chip-data');
+    if (proOn()) {
+      dc.hidden = false;
+      setText('#st-money', money(S.money));
+      const pay = E.proSalary();
+      setText('#st-income', pay > 0 ? '-' + money(pay) + '/s' : '');
+      setText('#st-data', fmt(S.pro.data));
+      for (const id of ['#chip-eq', '#chip-rp', '#chip-rep']) $(id).hidden = true;
+      if ($('#st-layers')._h) { $('#st-layers').innerHTML = ''; $('#st-layers')._h = ''; }
+      $('#btn-sound').innerHTML = `<img class="ico pixel" src="${SPR.icon(S.settings.sound ? 'sound' : 'mute')}" alt="Sound">`;
+      renderActBadge();
+      $('#strike').hidden = true; $('#challenge-tag').hidden = true;
+      return;
+    }
+    dc.hidden = true;
     setText('#st-money', money(S.money));
     const net = S.incomeEMA - E.salaryRate(M);
     setText('#st-income', (net >= 0 ? '+' : '-') + money(Math.abs(net)) + '/s');
@@ -1355,9 +1413,10 @@
     const S = E.S;
     AT.audio.unlock();
     let ok = true;
+    if (name.startsWith('pro-')) { ok = AT.proUI.act(name, arg, el); if (ok === 'quiet') return; render(); updateTop(); return ok; }
     switch (name) {
       case 'tab': tab = arg; S.reveal['new_' + arg] = 0; sig = null; $('#tabbody').scrollTop = 0; AT.audio.play('tab'); renderTabs(); break;
-      case 'view': AT.scene.setView(arg); AT.audio.play('tab'); break;
+      case 'view': if (proOn()) break; AT.scene.setView(arg); AT.audio.play('tab'); break;
       case 'mapreg': AT.scene.setMapRegion(+arg); break;
       case 'activity': setDrawer(!drawerOpen); break;
       case 'actfilter': actFilter = arg; fillDrawer(); break;
@@ -1433,7 +1492,7 @@
         sig = null; break;
       }
       case 'tut-next': case 'tut-step': case 'tut-skip': case 'brief-ok': AT.guide.act(name, arg); break;
-      case 'tut-replay': closeModal(); AT.guide.act(name, arg); tab = 'missions'; sig = null; renderTabs(); break;
+      case 'tut-replay': closeModal(); AT.guide.act(name, arg); tab = proOn() ? 'pro_workshop' : 'missions'; sig = null; renderTabs(); break;
       case 'manual': AT.guide.act(name, arg); sig = null; break;
       case 'brief-go': AT.guide.act('brief-ok'); return act('tab', arg, el);
       case 'fullscreen': toggleFullscreen(); break;
@@ -1444,7 +1503,13 @@
       case 'quit': saveGame(); native.quit(); break;
       case 'modal-close': closeModal(); break;
       case 'do-import': doImport(); break;
-      case 'do-reset': doReset(); break;
+      case 'do-reset': doReset(false); break;
+      case 'do-reset-skip': doReset(true); break;
+      case 'newpro': showNewPro(false); break;
+      case 'replaypro': showNewPro(true); break;
+      case 'do-newpro': startFresh({ keep: arg === 'keep' }); break;
+      case 'offer-play': closeModal(); break;
+      case 'offer-skip': closeModal(); E.proSkip(); break;
       case 'copy': copyExport(el); break;
       case 'ng': E.newGamePlus(); AT.guide.reset(); $('#ending') && $('#ending').remove(); sig = null; saveGame(); break;
       case 'keep': $('#ending') && $('#ending').remove(); break;
@@ -1499,10 +1564,40 @@
     let s = null;
     try { s = E.load(decodeURIComponent(escape(atob(raw)))); } catch (e) { s = null; }
     if (!s) { $('#imp-err').textContent = 'That code could not be read. Check that the whole code was pasted, and that it came from this version.'; return; }
-    E.S = s; E.touch(); applySettings(); AT.guide.reset(); sig = null; resetMonitor(); closeModal(); saveGame(); toast('stats', 'IMPORTED', 'Save loaded.');
+    E.S = s; E.touch(); if (!E.proActive()) writeDeviceFlag(); applySettings(); AT.guide.reset(); shellChanged(); closeModal(); saveGame(); toast('stats', 'IMPORTED', 'Save loaded.');
   }
-  function showReset() { modal(`<h2>Wipe Save?</h2><p class="note">This deletes all progress, including expansions, artifacts and achievements. It cannot be undone.</p><div class="flex"><button class="btn bad" data-act="do-reset">WIPE EVERYTHING</button><button class="btn" data-act="modal-close">KEEP MY GAME</button></div>`); }
-  function doReset() { E.newGame(); applySettings(); AT.guide.reset(); sig = null; resetMonitor(); tab = 'missions'; closeModal(); saveGame(); }
+  function showReset() {
+    const skip = E.proDevice();
+    modal(`<h2>Wipe Save?</h2><p class="note">This deletes all progress, including expansions, artifacts and achievements. It cannot be undone.${skip ? ' You have completed the prologue on this device, so the new game may skip it.' : ''}</p><div class="flex"><button class="btn bad" data-act="do-reset">WIPE${skip ? ' AND PLAY PROLOGUE' : ' EVERYTHING'}</button>${skip ? '<button class="btn bad" data-act="do-reset-skip">WIPE AND SKIP PROLOGUE</button>' : ''}<button class="btn" data-act="modal-close">KEEP MY GAME</button></div>`);
+  }
+  // A fresh game. skip: start with the prologue waived (only when the device flag allows it).
+  function doReset(skip) {
+    E.newGame(skip && E.proDevice() ? { skipPrologue: true } : undefined);
+    afterNewGame(); closeModal(); saveGame();
+  }
+  function afterNewGame() { applySettings(); AT.guide.reset(); shellChanged(); }
+  // New game (with prologue) wipes everything; Replay prologue keeps settings, achievements and artifacts. Both always play the prologue.
+  function showNewPro(keep) {
+    modal(`<h2>${keep ? 'Replay Prologue?' : 'New Game?'}</h2><p class="note">${keep ? 'This restarts the current run from the prologue. Your settings, achievements and artifacts are kept; ships, cash, research and expansions are lost.' : 'This deletes all progress, including expansions, artifacts and achievements, and starts again with the prologue. It cannot be undone.'}</p><div class="flex"><button class="btn bad" data-act="do-newpro" data-arg="${keep ? 'keep' : 'all'}">${keep ? 'REPLAY PROLOGUE' : 'NEW GAME'}</button><button class="btn" data-act="modal-close">CANCEL</button></div>`);
+  }
+  function startFresh(o) {
+    const old = E.S;
+    E.newGame();
+    if (o && o.keep && old) for (const k of ['ach', 'settings', 'artifacts', 'memorial', 'briefingsSeen']) if (old[k] !== undefined) E.S[k] = old[k];
+    E.S.briefingsSeen = E.S.briefingsSeen || {};
+    afterNewGame(); closeModal(); saveGame();
+  }
+  // the whole shell changed mode (prologue <-> mining, new game, import)
+  function shellChanged() {
+    sig = null; cardSig = null; resetMonitor();
+    if (AT.scene.proReset) AT.scene.proReset();
+    tab = proOn() ? 'pro_workshop' : 'missions';
+    if (AT.scene.setView) AT.scene.setView(proOn() ? 'launch' : 'map');
+    $('#cardbox').hidden = true; $('#cardbox').innerHTML = '';
+    const el = $('#directive'); if (el) el._h = null;
+    renderTabs();
+  }
+  UI.shellChanged = shellChanged;
   function showEnding() {
     const S = E.S;
     const d = document.createElement('div');
@@ -1568,6 +1663,12 @@
     if (native && native.save) { try { native.save(s); } catch (e) { /* ignore */ } }
   }
   UI.save = saveGame;
+  UI.core = {
+    esc, money, pct, btn, apply, conHead, sect, isCollapsed, toast, modal, closeModal, floatAt, SPR,
+    resetSig() { sig = null; }, resetCard() { cardSig = null; }, setTab(id) { tab = id; sig = null; E.S.reveal['new_' + id] = 0; $('#tabbody').scrollTop = 0; renderTabs(); },
+    getTab() { return tab; }, renderTabs() { renderTabs(); }, resetMonitor, shellChanged, writeDeviceFlag, saveGame,
+    openDrawer() { setDrawer(true); },
+  };
   function loadGame(data) {
     let raw = data && data.save;
     if (!raw && native && native.load) { try { raw = native.load(); } catch (e) { raw = null; } }
@@ -1592,6 +1693,11 @@
     AT.hooks.resolve = (m, ship, t, outcome) => { AT.scene.onResolve(m, ship, t, outcome); AT.audio.play(outcome === 'lost' ? 'lost' : 'return'); };
     AT.hooks.card = () => {};
     AT.hooks.event = (kind, arg) => {
+      if (/^pro[A-Z]/.test(kind) || kind === 'certified') {
+        if (kind === 'certified' || kind === 'proSkip') writeDeviceFlag();
+        if (AT.proUI) AT.proUI.event(kind, arg);
+        return;
+      }
       if (kind === 'region') toast('expansion', 'NEW SECTOR', AT.REGIONS[arg].name);
       if (kind === 'demoend') showDemoEnd();
       if (kind === 'prestige') { AT.scene.burst(); AT.audio.play('prestige'); sig = null; resetMonitor(); }
@@ -1600,9 +1706,10 @@
       if (kind === 'directive') { AT.audio.play('ach'); }
     };
 
+    E.proDevice(readDeviceFlag());
     const loaded = loadGame(data);
     let away = 0;
-    if (loaded) { E.S = loaded; E.touch(); away = (Date.now() - (loaded.saved || Date.now())) / 1000; }
+    if (loaded) { E.S = loaded; E.touch(); away = (Date.now() - (loaded.saved || Date.now())) / 1000; if (!E.proActive()) writeDeviceFlag(); } // a finished game proves the prologue was done
     else E.newGame();
     AT.hooks.log = addLog;
     if (native && native.achievement) for (const id in E.S.ach) native.achievement(id);
@@ -1612,6 +1719,7 @@
     AT.scene.cb.select = (id) => selectTarget(id, 'map');
     AT.scene.cb.closeupClick = () => {};
     applySettings();
+    if (proOn()) AT.scene.setView('launch');
     if (away > 60) {
       const cap = E.offlineCap();
       const secs = Math.min(away, cap);
@@ -1621,6 +1729,8 @@
     bindEvents();
     if (DEMO && E.S.layers[0].runs > 0) showDemoEnd(); // e.g. a full-game save imported into the demo
     updateReveal(); AT.guide.start(); renderTabs(); render(); updateTop(); renderDeck(); renderDirective(); renderViewBar();
+    // a brand-new game on a device that has finished the prologue before: offer to waive it
+    if (!loaded && E.proCanSkip()) modal(`<h2>Skip the Prologue?</h2><p class="note">You have completed the founding of AstroTech on this device before. You may take the license as granted and go straight to mining, or play it again.</p><div class="flex"><button class="btn gold" data-act="offer-play">PLAY THE PROLOGUE</button><button class="btn" data-act="offer-skip">SKIP PROLOGUE</button></div>`);
     const hot = window.claude && window.claude.hot;
     if (hot && hot.snapshot) hot.snapshot(() => ({ save: E.save() }));
     let lastT = performance.now(), uiAcc = 0, saveAcc = 0, lastSeen = performance.now();
@@ -1671,6 +1781,7 @@
         const ids = navKeys(), id = ids[e.key === '0' ? 9 : +e.key - 1];
         if (id) { e.preventDefault(); act('tab', id); }
       } else if (e.key === '[' || e.key === ']') {
+        if (proOn()) return;
         const vs = ['map', 'launch', 'target'], i = vs.indexOf(AT.scene.getView());
         act('view', vs[(i + (e.key === ']' ? 1 : vs.length - 1)) % vs.length]); e.preventDefault();
       } else if (e.key === 'a' || e.key === 'A') { act('activity'); e.preventDefault(); }
