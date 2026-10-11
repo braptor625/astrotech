@@ -697,12 +697,12 @@
 
   // ----------------------------- ARCHIVE -----------------------------
   PANELS.archive = {
-    sig(S) { return Object.keys(S.ach).length + '|' + Object.keys(S.artifacts).length + '|' + S.memorial.length + '|' + S.dirIdx; },
+    sig(S) { return Object.keys(S.ach).length + '|' + Object.keys(S.artifacts).length + '|' + S.memorial.length + '|' + S.dirIdx + '|' + AT.guide.manualSig(S); },
     build(S) {
       let h = `<div class="tabhead"><h2>Archive</h2></div>
         <h3 class="section-h">${SPR.img('mission')} BOARD DIRECTIVES <span class="sub">${S.dirIdx}/${AT.DIRECTIVES.length}</span></h3><div class="dirs">`;
       AT.DIRECTIVES.forEach((d, i) => { if (i <= S.dirIdx + 2) h += `<div class="dir ${i < S.dirIdx ? 'got' : i === S.dirIdx ? 'cur' : ''}"><b>${i + 1}</b><span>${i <= S.dirIdx ? d.text : 'Classified.'}</span></div>`; });
-      h += `</div><h3 class="section-h">${SPR.img('gem')} ARTIFACTS <span class="sub">${Object.keys(S.artifacts).length}/${Object.keys(AT.ARTIFACTS).length} · kept through every reset</span></h3><div class="arts">`;
+      h += `</div>${AT.guide.manualHTML(S)}<h3 class="section-h">${SPR.img('gem')} ARTIFACTS <span class="sub">${Object.keys(S.artifacts).length}/${Object.keys(AT.ARTIFACTS).length} · kept through every reset</span></h3><div class="arts">`;
       for (const [id, a] of Object.entries(AT.ARTIFACTS)) {
         const got = S.artifacts[id];
         h += `<div class="art slot ${got ? '' : 'locked'}" data-tip="${got ? 'art:' + id : 'txt:Undiscovered. ' + (a.find !== undefined ? 'A rare find on ordinary missions in the ' + AT.REGIONS[a.find].name + '.' : 'Recovered on an expedition.')}"><img class="ico lg pixel" src="${SPR.icon(got ? a.icon : 'lock')}" alt=""><span>${got ? a.name : '???'}</span></div>`;
@@ -723,6 +723,8 @@
           <div class="slot spread"><span>Graphics</span><div class="seg">${['low', 'high', 'ultra'].map((k) => btn('set', 'gfx:' + k, '', 'set_gfx_' + k)).join('')}</div></div>
           <div class="slot spread"><span>High contrast</span><div class="seg">${btn('set', 'highContrast', '', 'set_hc')}</div></div>
           <div class="slot spread"><span>Reduce motion</span><div class="seg">${btn('set', 'reduceMotion', '', 'set_rm')}</div></div>
+          <div class="slot spread"><span>Show briefings</span><div class="seg">${btn('set', 'briefings', '', 'set_brief')}</div></div>
+          <div class="slot spread"><span>Tutorial</span><div class="seg">${btn('tut-replay', 0, '', 'set_tut')}</div></div>
           <div class="slot spread"><span>Ask before resets</span><div class="seg">${btn('set', 'confirm', '', 'set_confirm')}</div></div>
           <div class="slot spread"><span>Fleet AI risk limit</span><div class="seg">${[0.1, 0.2, 0.35, 0.5].map((r) => btn('airisk', r, '', 'air_' + Math.round(r * 100))).join('')}</div></div>
           <div class="slot spread"><span>Display</span><div class="seg">${btn('fullscreen', 0, '', 'set_fs')}</div></div>
@@ -737,6 +739,7 @@
         tc: fmt(S.stats.contracts), ts: fmt(S.stats.surveyed), to: fmt(S.stats.oreMined) + 't', r0: String(S.layers[0].runs), r1: String(S.layers[1].runs), r2: String(S.layers[2].runs), r3: String(S.layers[3].runs), ng: '#' + (S.ngPlus + 1),
         set_short: { t: '1.23M', cls: { on: st.notation === 'short' } }, set_sci: { t: '1.23e6', cls: { on: st.notation === 'sci' } },
         set_sound: { t: st.sound ? 'ON' : 'OFF', cls: { on: st.sound } }, set_scan: { t: st.scanlines ? 'ON' : 'OFF', cls: { on: st.scanlines } },
+        set_brief: { t: st.showBriefings !== false ? 'ON' : 'OFF', cls: { on: st.showBriefings !== false } }, set_tut: { t: 'REPLAY' },
         set_ts_normal: { t: 'NORMAL', cls: { on: st.textSize === 'normal' } }, set_ts_large: { t: 'LARGE', cls: { on: st.textSize === 'large' } }, set_ts_xl: { t: 'XL', cls: { on: st.textSize === 'xl' } },
         set_gfx_low: { t: 'LOW', cls: { on: st.gfx === 'low' } }, set_gfx_high: { t: 'HIGH', cls: { on: st.gfx === 'high' } }, set_gfx_ultra: { t: 'ULTRA', cls: { on: st.gfx === 'ultra' } },
         set_hc: { t: st.highContrast ? 'ON' : 'OFF', cls: { on: !!st.highContrast } }, set_rm: { t: st.reduceMotion ? 'ON' : 'OFF', cls: { on: !!st.reduceMotion } },
@@ -1037,8 +1040,13 @@
         if (k === 'gfx' && ['low', 'high', 'ultra'].includes(val)) S.settings.gfx = val;
         if (k === 'highContrast') { S.settings.highContrast = !S.settings.highContrast; applySettings(); }
         if (k === 'reduceMotion') { S.settings.reduceMotion = !S.settings.reduceMotion; applySettings(); }
+        if (k === 'briefings') S.settings.showBriefings = S.settings.showBriefings === false;
         sig = null; break;
       }
+      case 'tut-next': case 'tut-step': case 'tut-skip': case 'brief-ok': AT.guide.act(name, arg); break;
+      case 'tut-replay': AT.guide.act(name, arg); tab = 'missions'; sig = null; renderTabs(); break;
+      case 'manual': AT.guide.act(name, arg); sig = null; break;
+      case 'brief-go': AT.guide.act('brief-ok'); return act('tab', arg, el);
       case 'fullscreen': toggleFullscreen(); break;
       case 'save': saveGame(); toast('stats', 'SAVED', 'Progress saved.'); break;
       case 'export': showExport(); break;
@@ -1049,7 +1057,7 @@
       case 'do-import': doImport(); break;
       case 'do-reset': doReset(); break;
       case 'copy': copyExport(el); break;
-      case 'ng': E.newGamePlus(); $('#ending') && $('#ending').remove(); sig = null; saveGame(); break;
+      case 'ng': E.newGamePlus(); AT.guide.reset(); $('#ending') && $('#ending').remove(); sig = null; saveGame(); break;
       case 'keep': $('#ending') && $('#ending').remove(); break;
       case 'demo-keep': $('#ending') && $('#ending').remove(); break;
       case 'wishlist': openSteam(); break;
@@ -1102,10 +1110,10 @@
     let s = null;
     try { s = E.load(decodeURIComponent(escape(atob(raw)))); } catch (e) { s = null; }
     if (!s) { $('#imp-err').textContent = 'That code could not be read. Check that the whole code was pasted, and that it came from this version.'; return; }
-    E.S = s; E.touch(); applySettings(); sig = null; lowSig = null; closeModal(); saveGame(); toast('stats', 'IMPORTED', 'Save loaded.');
+    E.S = s; E.touch(); applySettings(); AT.guide.reset(); sig = null; lowSig = null; closeModal(); saveGame(); toast('stats', 'IMPORTED', 'Save loaded.');
   }
   function showReset() { modal(`<h2>Wipe Save?</h2><p class="note">This deletes all progress, including expansions, artifacts and achievements. It cannot be undone.</p><div class="flex"><button class="btn bad" data-act="do-reset">WIPE EVERYTHING</button><button class="btn" data-act="modal-close">KEEP MY GAME</button></div>`); }
-  function doReset() { E.newGame(); applySettings(); sig = null; lowSig = null; tab = 'missions'; closeModal(); saveGame(); }
+  function doReset() { E.newGame(); applySettings(); AT.guide.reset(); sig = null; lowSig = null; tab = 'missions'; closeModal(); saveGame(); }
   function showEnding() {
     const S = E.S;
     const d = document.createElement('div');
@@ -1223,7 +1231,7 @@
     }
     bindEvents();
     if (DEMO && E.S.layers[0].runs > 0) showDemoEnd(); // e.g. a full-game save imported into the demo
-    updateReveal(); renderTabs(); render(); updateTop(); renderLower(); renderDirective(); renderViewBar();
+    updateReveal(); AT.guide.start(); renderTabs(); render(); updateTop(); renderLower(); renderDirective(); renderViewBar();
     const hot = window.claude && window.claude.hot;
     if (hot && hot.snapshot) hot.snapshot(() => ({ save: E.save() }));
     let lastT = performance.now(), uiAcc = 0, saveAcc = 0, lastSeen = performance.now();
@@ -1232,7 +1240,8 @@
       if (dt > 5) E.simulate(Math.min(dt, E.offlineCap())); else if (dt > 0) E.tick(Math.min(dt, 1));
       AT.scene.frame(Math.min(dt, 0.1));
       uiAcc += dt; saveAcc += dt;
-      if (uiAcc >= 0.1) { uiAcc = 0; updateReveal(); renderTabs(); render(); updateTop(); renderLower(); renderDirective(); renderCard(); renderViewBar(); placeTip(); }
+      if (uiAcc >= 0.1) { uiAcc = 0; updateReveal(); renderTabs(); render(); updateTop(); renderLower(); renderDirective(); renderCard(); renderViewBar(); AT.guide.tick(); placeTip(); }
+      AT.guide.frame();
       if (saveAcc >= 15) { saveAcc = 0; saveGame(); }
       requestAnimationFrame(frame);
     }

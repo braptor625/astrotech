@@ -56,7 +56,8 @@
       story: {}, log: [], strike: false,
       stats: { missions: 0, launched: 0, losses: 0, deaths: 0, contracts: 0, incidents: 0, totalTime: 0, oreMined: 0, oreSold: 0, surveyed: 0 },
       ach: {}, ended: false, ngPlus: 0,
-      settings: { notation: 'short', sound: true, scanlines: true, buyAmt: 1, noConfirm: false, textSize: 'large', gfx: 'high', highContrast: false,
+      tutorial: 0, tutBase: null, briefingsSeen: {},
+      settings: { notation: 'short', sound: true, scanlines: true, buyAmt: 1, noConfirm: false, textSize: 'large', gfx: 'high', highContrast: false, showBriefings: true,
         reduceMotion: typeof matchMedia === 'function' && !!matchMedia('(prefers-reduced-motion: reduce)').matches },
       reveal: {}, selTarget: null, selShip: null,
     };
@@ -77,6 +78,10 @@
     merged.run = Object.assign(freshRun(), s.run || {});
     merged.autobuy = Object.assign(E.newState().autobuy, s.autobuy || {});
     merged.layers = AT.LAYERS.map((l, i) => Object.assign(E.newState().layers[i], (s.layers || [])[i] || {}));
+    // saves from before the tutorial and field manual: the tutorial counts as done, and the UI marks every
+    // briefing that is already unlocked as seen (briefingsSeen === null means "sweep on load")
+    if (s.tutorial === undefined) merged.tutorial = 'done';
+    merged.briefingsSeen = s.briefingsSeen && typeof s.briefingsSeen === 'object' ? s.briefingsSeen : null;
     return merged;
   };
   E.save = function () { E.S.saved = Date.now(); return JSON.stringify(E.S); };
@@ -1368,8 +1373,8 @@
     E.S = E.newState();
     const S = E.S;
     S.ngPlus = (old.ngPlus || 0) + 1;
-    for (const k of ['ach', 'settings', 'stats', 'artifacts', 'memorial', 'dirIdx']) S[k] = old[k];
-    S.dirIdx = 0;
+    for (const k of ['ach', 'settings', 'stats', 'artifacts', 'memorial', 'dirIdx', 'briefingsSeen']) S[k] = old[k];
+    S.dirIdx = 0; S.tutorial = 'done'; S.tutBase = null;
     E.resetRun(0, E.mults());
     E.unlockAch('ACH_NGPLUS');
     E.say('start');
