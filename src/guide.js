@@ -217,8 +217,8 @@
       h += '</div>';
     }
     const locked = LIST.length - n;
-    const lockedCell = `<div class="man slot locked"><img class="ico pixel" src="${SPR.icon('lock')}" alt=""><b>Classified.</b></div>`;
-    if (locked) h += `</div><div class="manual dim">${lockedCell.repeat(locked)}`;
+    // one line instead of a wall of locked cells: unseen entries carry no information
+    if (locked) h += `</div><p class="empty">${SPR.img('lock')} ${locked} more ${locked === 1 ? 'entry' : 'entries'} classified. Briefings unlock as the company grows.</p><div>`;
     return h + '</div>';
   };
 
