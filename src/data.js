@@ -490,9 +490,9 @@
     { id: 'welcome', kick: 'WELCOME, OPERATOR', text: 'AstroTech Mining Co. Ships dig rocks, you sell the ore, the Board takes the credit. Four clicks to your first paycheck.' },
     { id: 'fleet', kick: 'STEP 1 · FLEET', tab: 'fleet', tabText: 'Open the FLEET console. That is where ships live.', sel: '[data-act="buyship"][data-arg="prospector"]', text: 'Buy a PROSPECTOR. One pilot, one drill, one bad idea. It is also the cheapest.', lost: 'That one did not come back. Buy another PROSPECTOR. Ships are consumables too.' },
     { id: 'launch', kick: 'STEP 2 · MISSIONS', tab: 'missions', tabText: 'Open MISSION CONTROL. The first target is already picked.', sel: '#tabbody .tcard [data-act="launch"]', text: 'Press LAUNCH. The target is surveyed, so the risk is low. Low is not none.', lost: 'No cargo. It happens. Press LAUNCH again.' },
-    { id: 'flight', kick: 'STEP 3 · IN FLIGHT', sel: '.left', text: 'Out, drill, back. Watch the ship in the viewport; the FLIGHTS board has the countdown. Cargo lands in your hold.' },
+    { id: 'flight', kick: 'STEP 3 · IN FLIGHT', sel: '.monitor', text: 'Out, drill, back. Watch the ship in the viewport; the Flight Deck under it has the countdown. Cargo lands in your hold.' },
     { id: 'sell', kick: 'STEP 4 · MARKET', tab: 'market', tabText: 'Cargo is home. Open the MARKET console.', sel: '[data-act="sellall"]', text: 'Press SELL EVERYTHING. Big sales push the price down, so later you will want to be patient.' },
-    { id: 'done', kick: 'FIRST PAYCHECK', sel: '#directive', text: 'The Board posts orders here, one at a time. Follow the strip. New consoles unlock as you grow, each with a short briefing.' },
+    { id: 'done', kick: 'FIRST PAYCHECK', sel: '#directive', text: 'The Board posts orders up here, one at a time. Follow the BOARD ORDER pill; click it for the full list. New consoles unlock as you grow, each with a short briefing.' },
   ];
 
   // =====================================================================
@@ -509,7 +509,7 @@
     { id: 'b_research', when: ['reveal', 'research'], icon: 'research', title: 'Research Console', goto: 'research',
       lines: ['Scientists produce RP. Hire one in Crew, then spend RP on nodes.', 'Each node needs the one before it. They unlock ships, automation and bigger numbers.', 'Nobody reads the papers. Everyone reads the results.'] },
     { id: 'b_projects', when: ['reveal', 'projects'], icon: 'projects', title: 'Projects Console', goto: 'projects',
-      lines: ['One-time company initiatives, paid in cash. New ones appear as you grow.', 'Early projects pay for themselves. A few have side effects.', 'The log entries are worth reading.'] },
+      lines: ['One-time company initiatives, paid in cash. New ones appear as you grow.', 'Early projects pay for themselves. A few have side effects.', 'The Activity log entries are worth reading.'] },
     { id: 'b_outposts', when: ['reveal', 'outposts'], icon: 'outpost', title: 'Outposts Online', goto: 'outposts',
       lines: ['Build a permanent base on a surveyed target, from its card in Missions.', 'It ships ore every second with no pilot and no risk, until the reserve runs dry.', 'Upgrade levels for more tonnes per second. Rocks are not forever.'] },
     { id: 'b_company', when: ['reveal', 'company'], icon: 'company', title: 'Company Console', goto: 'company',
@@ -549,7 +549,7 @@
     { id: 'b_quarter', when: ['quarter'], icon: 'clock', title: 'Quarterly Results', goto: 'company',
       lines: ["Each quarter (90 seconds) must beat last quarter's earnings by 20%.", 'A beat raises confidence, which raises valuation. A miss cuts it hard.', 'Guidance Management research lowers the bar to 10%.'] },
     { id: 'b_fleetai', when: ['flag', 'fleetai'], icon: 'lens', title: 'Fleet Coordination AI', goto: 'archive',
-      lines: ['Idle ships now pick their own targets, and surveys run themselves.', 'Set its risk limit under Archive > Settings.', 'It does not ask permission. That was the point.'] },
+      lines: ['Idle ships now pick their own targets, and surveys run themselves.', 'Set its risk limit in Settings (the gear in the top bar).', 'It does not ask permission. That was the point.'] },
     { id: 'b_autobuy', when: ['flag', 'autobuy'], icon: 'box', title: 'Procurement AI', goto: 'fleet', post: true,
       lines: ['AUTO-BUY in Fleet buys pads, ships and upgrades whenever cash allows.', 'Switch each type on separately.', 'It spends without hesitation. Accounting approves.'] },
     // ---- prestige layers

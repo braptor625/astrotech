@@ -15,24 +15,25 @@
   const pct = (x) => AT.fmtPct(x);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let tab = 'missions', sig = null, refs = [], tipEl, tipKey = null, tipX = 0, tipY = 0;
-  let lowTab = 'flights', lowSig = null, cardSig = null, resPage = 0, treeRO = null;
+  let cardSig = null, resPage = 0, treeRO = null;
   const confirmUntil = {};
   const cache = new WeakMap();
 
   // =====================================================================
   // TABS
   // =====================================================================
+  // Rail order. The number keys 1..9,0 open the revealed consoles in this order.
   const TABS = [
-    { id: 'missions', label: 'Missions', icon: 'mission' },
-    { id: 'fleet', label: 'Fleet', icon: 'rocket' },
-    { id: 'crew', label: 'Crew', icon: 'crew' },
-    { id: 'market', label: 'Market', icon: 'market' },
-    { id: 'outposts', label: 'Outposts', icon: 'outpost' },
-    { id: 'research', label: 'Research', icon: 'research' },
-    { id: 'projects', label: 'Projects', icon: 'projects' },
-    { id: 'company', label: 'Company', icon: 'company' },
-    { id: 'expansion', label: 'Expansion', icon: 'expansion' },
-    { id: 'archive', label: 'Archive', icon: 'stats' },
+    { id: 'missions', label: 'Missions', short: 'Missions', icon: 'mission', group: 'Operations' },
+    { id: 'fleet', label: 'Fleet', short: 'Fleet', icon: 'rocket', group: 'Operations' },
+    { id: 'crew', label: 'Crew', short: 'Crew', icon: 'crew', group: 'Operations' },
+    { id: 'outposts', label: 'Outposts', short: 'Outposts', icon: 'outpost', group: 'Operations' },
+    { id: 'market', label: 'Market', short: 'Market', icon: 'market', group: 'Economy' },
+    { id: 'company', label: 'Company', short: 'Company', icon: 'company', group: 'Economy' },
+    { id: 'projects', label: 'Projects', short: 'Projects', icon: 'projects', group: 'Economy' },
+    { id: 'research', label: 'Research', short: 'Research', icon: 'research', group: 'Science' },
+    { id: 'expansion', label: 'Expansion', short: 'Expand', icon: 'expansion', group: 'Progress' },
+    { id: 'archive', label: 'Archive', short: 'Archive', icon: 'book', group: 'Progress' },
   ];
   function updateReveal() {
     const S = E.S, R = S.reveal, M = E.mults();
@@ -66,15 +67,53 @@
     if (t === 'artifacts') return 'archive';
     return null;
   }
+  // What needs the player, per console: { n } a count, or { dot } a bare marker; tip says why.
+  function navBadges(S, M) {
+    const b = {};
+    const idle = S.ships.filter((s) => E.canFly(s, M)).length;
+    if (idle > 0 && E.padsFree() > 0) b.missions = { n: idle, tip: idle + ' idle ship' + (idle > 1 ? 's' : '') + ' ready to launch' };
+    const worn = M.flags.autorepair ? 0 : S.ships.filter((s) => s.state === 'idle' && s.cond < 0.6).length;
+    if (worn) b.fleet = { n: worn, kind: 'warn', tip: worn + ' worn hull' + (worn > 1 ? 's' : '') + ' need repair' };
+    if (S.strike) b.crew = { dot: 1, kind: 'bad', tip: 'Crew on strike: payroll is unpaid' };
+    else if (!M.flags.autopilot && !M.flags.aipilots) {
+      const open = S.ships.filter((s) => !s.pilot).length;
+      const can = S.candidates.filter((c) => S.money >= E.pilotCost(c, M)).length;
+      const n = Math.min(open, can);
+      if (n > 0) b.crew = { n, tip: n + ' pilot candidate' + (n > 1 ? 's' : '') + ' you can hire for ships without a pilot' };
+    }
+    const ready = S.contracts.filter((c) => E.contractReady(c)).length;
+    const holding = Object.values(S.ores).some((v) => v > 0.0001) && !(M.flags.autosell && S.autosell !== 'off');
+    if (ready) b.market = { n: ready, tip: ready + ' contract' + (ready > 1 ? 's' : '') + ' ready to deliver' };
+    else if (holding) b.market = { dot: 1, tip: 'Cargo in the hold, ready to sell' };
+    if (!M.rules.noResearch) {
+      const rs = AT.RESEARCH.filter((r) => E.researchAvailable(r) && S.rp >= r.cost).length;
+      if (rs) b.research = { n: rs, tip: rs + ' research node' + (rs > 1 ? 's' : '') + ' you can afford' };
+    }
+    const pr = AT.PROJECTS.filter((p) => E.projectVisible(p) && S.money >= p.cost).length;
+    if (pr) b.projects = { n: pr, tip: pr + ' project' + (pr > 1 ? 's' : '') + ' you can fund' };
+    if (AT.LAYERS.some((l, i) => E.pendingGain(i, M) >= 1) || E.canEnd()) b.expansion = { dot: 1, kind: 'warn', tip: E.canEnd() ? 'The final transaction is ready' : 'Prestige is ready' };
+    return b;
+  }
   function renderTabs() {
-    const S = E.S, dtab = directiveTab();
-    const worn = !E.mults().flags.autorepair && S.ships.some((x) => x.state === 'idle' && x.cond < 0.6);
+    const S = E.S, M = E.mults(), dtab = directiveTab();
+    const worn = !M.flags.autorepair && S.ships.some((x) => x.state === 'idle' && x.cond < 0.6);
     const hintOn = (id) => id === dtab || (worn && id === 'fleet');
-    const html = TABS.filter((t) => S.reveal[t.id]).map((t) =>
-      `<button class="btn tab ${t.id === tab ? 'active' : ''} ${S.reveal['new_' + t.id] ? 'new' : ''} ${hintOn(t.id) && t.id !== tab ? 'hint' : ''}" data-act="tab" data-arg="${t.id}"><img src="${SPR.icon(t.icon)}" alt="" class="pixel">${t.label}<span class="dot"></span></button>`).join('');
+    const badges = navBadges(S, M);
+    let html = '', group = '', key = 0;
+    for (const t of TABS) {
+      if (!S.reveal[t.id]) continue;
+      if (t.group !== group) { group = t.group; html += `<div class="rail-g" role="presentation">${group}</div>`; }
+      key++;
+      const k = key === 10 ? '0' : key <= 9 ? String(key) : '';
+      const bd = badges[t.id], fresh = !!S.reveal['new_' + t.id];
+      const tip = t.label + (k ? ' (' + k + ')' : '') + (fresh ? '. New console online.' : bd ? '. ' + bd.tip : '');
+      const mark = bd ? (bd.n ? `<span class="nbadge ${bd.kind || ''}">${bd.n > 99 ? '99+' : bd.n}</span>` : `<span class="nbadge dot ${bd.kind || ''}"></span>`) : fresh ? '<span class="nbadge dot new"></span>' : '<span></span>';
+      html += `<button class="tab ${t.id === tab ? 'active' : ''} ${hintOn(t.id) && t.id !== tab ? 'hint' : ''}" data-act="tab" data-arg="${t.id}" data-tip="txt:${tip}" aria-label="${t.label}${fresh ? ', new' : bd ? ', ' + bd.tip : ''}" ${k ? `aria-keyshortcuts="${k}"` : ''} ${t.id === tab ? 'aria-current="page"' : ''}><img src="${SPR.icon(t.icon)}" alt="" class="pixel"><span class="n-lbl">${t.label}</span><span class="n-short">${t.short}</span>${mark}</button>`;
+    }
     const nav = $('#tabs');
     if (nav._html !== html) { nav.innerHTML = html; nav._html = html; }
   }
+  function navKeys() { return TABS.filter((t) => E.S.reveal[t.id]).map((t) => t.id); }
 
   // =====================================================================
   // BINDER
@@ -111,8 +150,18 @@
     }
     apply(T.update(S, M), refs);
     if (T.draw) T.draw(body, S, M);
+    renderSettings();
   }
   const btn = (act, arg, cls, k, extra) => `<button class="btn ${cls || ''}" data-act="${act}" data-arg="${arg}" ${k ? `data-k="${k}"` : ''} ${extra || ''}></button>`;
+  // Shared console components (docs/ui-redesign.md, "Components")
+  const conHead = (title, purpose, act) => `<div class="con-head"><div class="ch-title"><h2>${title}</h2>${purpose ? `<p class="purpose">${purpose}</p>` : ''}</div>${act ? `<div class="ch-act">${act}</div>` : ''}</div>`;
+  const isCollapsed = (key) => !!(E.S.settings.collapsed && E.S.settings.collapsed[key]);
+  // A collapsible section. key = 'console:section'. A panel whose sections can collapse must put isCollapsed(key) in its sig() (or just read S.settings.collapsed).
+  const sect = (key, title, opts, body) => {
+    const o = opts || {}, c = isCollapsed(key);
+    return `<section class="sect ${c ? 'collapsed' : ''}"><div class="sect-head"><h3><button class="sect-tog" data-act="collapse" data-arg="${key}" aria-expanded="${!c}">${title}</button></h3>${o.count !== undefined ? `<span class="count">${o.count}</span>` : ''}${o.ctl ? `<div class="sect-ctl">${o.ctl}</div>` : ''}</div><div class="sect-body">${body}</div></section>`;
+  };
+  UI.conHead = conHead; UI.sect = sect; UI.isCollapsed = isCollapsed;
   const LAYER_ICON = ['cc', 'cs', 'ss', 'dm'];
   function rk(hull, maxH, cls) {
     const c = SPR.rocket(hull);
@@ -155,8 +204,8 @@
       return ids + '|' + S.selTarget + '|' + S.ships.map((s) => s.id).join(',') + '|' + (S.settings.sort || 'value') + '|' + S.focus + '|' + S.region + (M.flags.outposts ? 'O' : '') + (M.flags.flight ? 'F' : '') + (M.flags.fleetai ? 'A' : '') + (S._sortTick || 0);
     },
     build(S, M) {
-      let h = `<div class="tabhead"><h2>Mission Control</h2><div class="seg">
-        <span class="tog">SORT</span>${['value', 'risk', 'dist'].map((m) => `<button class="btn" data-act="sort" data-arg="${m}" data-k="sort_${m}">${m === 'value' ? '$/MIN' : m === 'risk' ? 'RISK' : 'DIST'}</button>`).join('')}</div></div>
+      let h = `${conHead('Mission Control', 'Pick a target, assign a ship, launch.', `<div class="seg">
+        <span class="tog">SORT</span>${['value', 'risk', 'dist'].map((m) => `<button class="btn" data-act="sort" data-arg="${m}" data-k="sort_${m}">${m === 'value' ? '$/MIN' : m === 'risk' ? 'RISK' : 'DIST'}</button>`).join('')}</div>`)}
         <div class="mc-status slot"><span data-k="padsfree"></span><span data-k="tracking"></span><span data-k="nextfind"></span>
         ${M.flags.flight ? btn('dispatch', 0, 'gold', 'dispatch', 'data-tip="txt:Send every idle ship to its best target under your risk limit."') : ''}</div>`;
       if (S.region > 0) h += `<div class="seg focus"><span class="tog">TELESCOPE FOCUS</span>${['auto', ...Array.from({ length: S.region + 1 }, (_, i) => String(i))].map((f) => `<button class="btn" data-act="focus" data-arg="${f}" data-k="focus_${f}">${f === 'auto' ? 'AUTO' : AT.REGIONS[+f].short}</button>`).join('')}</div>`;
@@ -268,7 +317,7 @@
       return S.ships.map((s) => s.id + s.hull).join(',') + '|' + AT.HULLS.filter((h) => E.hullUnlocked(h, M)).length + '|' + [...new Set(S.ships.map((s) => s.hull))].join() + (M.flags.flight ? 'F' : '') + (M.flags.autobuy ? 'B' : '') + (M.flags.autorepair ? 'R' : '') + S.region;
     },
     build(S, M) {
-      let h = `<div class="tabhead"><h2>Fleet & Infrastructure</h2>${M.flags.autobuy ? `<div class="seg"><span class="tog">AUTO-BUY</span>${btn('autobuy', 'pads', '', 'ab_pads')}${btn('autobuy', 'ships', '', 'ab_ships')}${btn('autobuy', 'modules', '', 'ab_modules')}</div>` : ''}</div>
+      let h = `${conHead('Fleet & Infrastructure', 'Buy ships, pads and probes. Keep hulls in shape.', M.flags.autobuy ? `<div class="seg"><span class="tog">AUTO-BUY</span>${btn('autobuy', 'pads', '', 'ab_pads')}${btn('autobuy', 'ships', '', 'ab_ships')}${btn('autobuy', 'modules', '', 'ab_modules')}</div>` : '')}
         <div class="cards three">
           <div class="card slot"><h4>${SPR.img('pad')} Launch Pads</h4><p data-k="pad_txt"></p>${btn('pad', 0, 'gold', 'pad_btn')}</div>
           <div class="card slot"><h4>${SPR.img('scope')} Observatory</h4><p data-k="obs_txt"></p>${btn('obs', 0, '', 'obs_btn')}</div>
@@ -340,7 +389,7 @@
   PANELS.crew = {
     sig(S, M) { return S.pilots.map((p) => p.id + ':' + p.ship).join(',') + '|' + S.candidates.map((c) => c.id).join(',') + (M.flags.autohire ? 'A' : '') + (M.rules.noStaff ? 'X' : '') + (M.flags.aipilots ? 'I' : ''); },
     build(S, M) {
-      let h = `<div class="tabhead"><h2>Crew</h2><span class="tog" data-k="payroll"></span></div>
+      let h = `${conHead('Crew', 'Pilots fly the ships. Staff boost the company.', '<span class="tog" data-k="payroll"></span>')}
         <h3 class="section-h">PILOTS <span class="sub">${M.flags.aipilots ? 'optional now. AI pilots fly any empty ship' : 'every ship needs one until you research Autopilot'}</span></h3><div class="list">`;
       for (const p of S.pilots) {
         const tr = AT.TRAITS.find((x) => x.id === p.trait);
@@ -401,7 +450,7 @@
     ores(S) { return Object.keys(AT.ORES).filter((id) => AT.ORES[id].region <= S.region && (S.ores[id] > 0 || S.market[id].inflow > 0 || AT.ORES[id].region === S.region || id === 'iron')); },
     sig(S, M) { return this.ores(S).join() + '|' + S.contracts.map((c) => c.id).join() + (M.flags.autosell ? 'A' : '') + (M.flags.analytics ? 'N' : ''); },
     build(S, M) {
-      let h = `<div class="tabhead"><h2>Market & Contracts</h2>${btn('sellall', 0, 'gold big', 'sellall')}</div>`;
+      let h = conHead('Market & Contracts', 'Sell ore and deliver client contracts.', btn('sellall', 0, 'gold big', 'sellall'));
       h += `<h3 class="section-h">${SPR.img('contract')} CLIENT CONTRACTS <span class="sub" data-k="repline"></span></h3><div class="bar rep"><i data-k="repbar"></i></div><div class="cards contracts">`;
       if (!S.contracts.length) h += `<div class="slot teaser" style="grid-column:1/-1">NO CONTRACTS ON THE BOARD. NEW CLIENTS CALL EVERY FEW MINUTES.</div>`;
       for (const c of S.contracts) {
@@ -469,7 +518,7 @@
   PANELS.outposts = {
     sig(S) { return S.targets.filter((t) => t.outpost).map((t) => t.id).join() + '|' + S.builds.map((b) => b.target).join(); },
     build(S, M) {
-      let h = `<div class="tabhead"><h2>Outposts</h2><span class="tog" data-k="optotal"></span></div>
+      let h = `${conHead('Outposts', 'Permanent mining bases that ship ore on their own.', '<span class="tog" data-k="optotal"></span>')}
         <p class="note">Permanent bases on surveyed targets. Build one from a target's card in Mission Control. Up to ${AT.OUTPOST.perRegion} per region; levels go to ${AT.OUTPOST.maxLevel}.</p><div class="list">`;
       for (const b of S.builds) { const t = E.targetById(b.target); if (t) h += `<div class="slot oprow"><img class="tico" src="${SPR.bodyIcon(t)}" alt=""><div class="smain"><div class="sname">${esc(t.name)}</div><div class="ssub">UNDER CONSTRUCTION</div><div class="bar thin"><i data-k="ob_${t.id}"></i></div></div></div>`; }
       const ops = S.targets.filter((t) => t.outpost);
@@ -523,7 +572,7 @@
     sig(S) { return resPage + '|' + S.region + '|' + AT.RESEARCH.filter((r) => r.region === resPage).map((r) => (S.research[r.id] ? 1 : 0)).join(''); },
     build(S, M) {
       if (resPage > S.region) resPage = 0;
-      let h = `<div class="tabhead"><h2>Research</h2><div class="chip slot rp"><img class="ico pixel" src="${SPR.icon('rp')}" alt=""><b data-k="rp"></b><span class="sub" data-k="rprate"></span></div></div>`;
+      let h = conHead('Research', 'Spend RP on nodes that unlock ships, automation and bigger numbers.', `<div class="chip slot rp"><img class="ico pixel" src="${SPR.icon('rp')}" alt=""><b data-k="rp"></b><span class="sub" data-k="rprate"></span></div>`);
       if (S.region > 0) h += `<div class="seg" style="margin-bottom:8px">${Array.from({ length: S.region + 1 }, (_, i) => `<button class="btn ${i === resPage ? 'on' : ''}" data-act="respage" data-arg="${i}">${AT.REGIONS[i].short}</button>`).join('')}</div>`;
       h += `<p class="note" data-k="rpnote"></p><div class="tree-wrap"><div class="tree" id="tree"><svg id="tree-svg"></svg>`;
       for (const r of AT.RESEARCH.filter((x) => x.region === resPage)) h += `<button class="btn node" style="grid-column:${r.col + 1};grid-row:${r.row + 1}" data-act="res" data-arg="${r.id}" data-tip="res:${r.id}" data-k="n_${r.id}" id="node-${r.id}"></button>`;
@@ -575,7 +624,7 @@
     sig(S) { return this.vis(S).map((p) => p.id).join() + '|' + Object.keys(S.projects).length; },
     build(S) {
       const vis = this.vis(S);
-      let h = `<div class="tabhead"><h2>Projects</h2><span class="tog" data-k="pdone"></span></div><p class="note">One-time company initiatives. New ones appear as AstroTech grows.</p>`;
+      let h = conHead('Projects', 'One-time company initiatives. New ones appear as AstroTech grows.', '<span class="tog" data-k="pdone"></span>');
       if (!vis.length) h += '<div class="slot teaser">NO PROJECTS PENDING. KEEP GROWING.</div>';
       h += '<div class="cards">';
       for (const p of vis) h += `<div class="card slot" data-tip="proj:${p.id}"><h4>${p.name}</h4><p>${p.desc}</p>${btn('proj', p.id, 'gold', 'pr_' + p.id)}</div>`;
@@ -595,7 +644,7 @@
   PANELS.company = {
     sig(S, M) { return 'co' + (M.incorp ? 1 : 0); },
     build(S, M) {
-      let h = `<div class="tabhead"><h2>AstroTech Mining Co.</h2><span class="tog" data-k="status"></span></div>
+      let h = `${conHead('AstroTech Mining Co.', 'Valuation, shares and the quarterly target.', '<span class="tog" data-k="status"></span>')}
         <div class="kpis"><div class="kpi slot"><div class="k">VALUATION</div><div class="v" data-k="val"></div></div><div class="kpi slot"><div class="k">YOUR STAKE</div><div class="v" data-k="own"></div></div>
         <div class="kpi slot"><div class="k">YOUR EQUITY</div><div class="v good" data-k="eq"></div></div><div class="kpi slot"><div class="k">PEAK EQUITY THIS RUN</div><div class="v gold" data-k="peak"></div></div></div>
         <div class="slot" style="margin-bottom:10px"><div class="note" style="margin:0" data-k="breakdown"></div></div>`;
@@ -637,7 +686,7 @@
       return s + (E.canEnd() ? 'E' : '');
     },
     build(S, M) {
-      let h = `<div class="tabhead"><h2>Expansion</h2><span class="tog">PRESTIGE: RESET FOR PERMANENT POWER</span></div>`;
+      let h = conHead('Expansion', 'Prestige: reset the run for permanent power.', '');
       if (S.challenge) {
         const c = E.challengeDef(S.challenge);
         h += `<div class="slot challenge-on"><div class="spread"><h3>CHALLENGE: ${c.name}</h3>${btn('abandon', 0, 'bad', 'abandon')}</div><p class="note">${c.desc} Goal: reach ${money(AT.LAYERS[S.challenge.layer].req)} equity. Reward: ${c.reward}</p><div class="bar tall steps"><i data-k="chbar"></i></div></div>`;
@@ -699,7 +748,7 @@
   PANELS.archive = {
     sig(S) { return Object.keys(S.ach).length + '|' + Object.keys(S.artifacts).length + '|' + S.memorial.length + '|' + S.dirIdx + '|' + AT.guide.manualSig(S); },
     build(S) {
-      let h = `<div class="tabhead"><h2>Archive</h2></div>
+      let h = `${conHead('Archive', 'Board directives, field manual, artifacts, achievements and records.', '')}
         <h3 class="section-h">${SPR.img('mission')} BOARD DIRECTIVES <span class="sub">${S.dirIdx}/${AT.DIRECTIVES.length}</span></h3><div class="dirs">`;
       AT.DIRECTIVES.forEach((d, i) => { if (i <= S.dirIdx + 2) h += `<div class="dir ${i < S.dirIdx ? 'got' : i === S.dirIdx ? 'cur' : ''}"><b>${i + 1}</b><span>${i <= S.dirIdx ? d.text : 'Classified.'}</span></div>`; });
       h += `</div>${AT.guide.manualHTML(S)}<h3 class="section-h">${SPR.img('gem')} ARTIFACTS <span class="sub">${Object.keys(S.artifacts).length}/${Object.keys(AT.ARTIFACTS).length} · kept through every reset</span></h3><div class="arts">`;
@@ -714,29 +763,52 @@
       else h += `<div class="memorial slot">${S.memorial.slice().reverse().map((m) => `<div><b>${esc(m.name)}</b> · L${m.level} · ${esc(m.ship)} · ${esc(m.target)}</div>`).join('')}</div>`;
       h += `<h3 class="section-h">${SPR.img('stats')} RECORDS</h3><table class="stats-t"><tbody>
         ${[['Time played', 'tp'], ['This run', 'tr'], ['Total revenue', 'te'], ['Revenue this run', 'ter'], ['Missions flown', 'tm'], ['Ships lost', 'tl'], ['Pilots lost', 'td'], ['Contracts delivered', 'tc'], ['Surveys', 'ts'], ['Ore mined', 'to'],
-          ['Kuiper Jumps', 'r0'], ['Oort Exoduses', 'r1'], ['Stellar Ignitions', 'r2'], ['Galactic Ascents', 'r3'], ['Universe', 'ng']].map(([l, k]) => `<tr><td>${l}</td><td data-k="${k}"></td></tr>`).join('')}</tbody></table>
-        <h3 class="section-h">SETTINGS</h3><div class="list">
-          <div class="slot spread"><span>Number format</span><div class="seg">${btn('set', 'notation:short', '', 'set_short')}${btn('set', 'notation:sci', '', 'set_sci')}</div></div>
-          <div class="slot spread"><span>Sound effects</span><div class="seg">${btn('set', 'sound', '', 'set_sound')}</div></div>
-          <div class="slot spread"><span>CRT scanlines</span><div class="seg">${btn('set', 'scanlines', '', 'set_scan')}</div></div>
-          <div class="slot spread"><span>Text size</span><div class="seg">${[['normal', 'NORMAL'], ['large', 'LARGE'], ['xl', 'XL']].map(([k, l]) => btn('set', 'textSize:' + k, '', 'set_ts_' + k, `aria-label="Text size ${l.toLowerCase()}"`)).join('')}</div></div>
-          <div class="slot spread"><span>Graphics</span><div class="seg">${['low', 'high', 'ultra'].map((k) => btn('set', 'gfx:' + k, '', 'set_gfx_' + k)).join('')}</div></div>
-          <div class="slot spread"><span>High contrast</span><div class="seg">${btn('set', 'highContrast', '', 'set_hc')}</div></div>
-          <div class="slot spread"><span>Reduce motion</span><div class="seg">${btn('set', 'reduceMotion', '', 'set_rm')}</div></div>
-          <div class="slot spread"><span>Show briefings</span><div class="seg">${btn('set', 'briefings', '', 'set_brief')}</div></div>
-          <div class="slot spread"><span>Tutorial</span><div class="seg">${btn('tut-replay', 0, '', 'set_tut')}</div></div>
-          <div class="slot spread"><span>Ask before resets</span><div class="seg">${btn('set', 'confirm', '', 'set_confirm')}</div></div>
-          <div class="slot spread"><span>Fleet AI risk limit</span><div class="seg">${[0.1, 0.2, 0.35, 0.5].map((r) => btn('airisk', r, '', 'air_' + Math.round(r * 100))).join('')}</div></div>
-          <div class="slot spread"><span>Display</span><div class="seg">${btn('fullscreen', 0, '', 'set_fs')}</div></div>
-          <div class="slot spread"><span>Save data</span><div class="seg">${btn('save', 0, '', 'set_save')}${btn('export', 0, '', 'set_export')}${btn('import', 0, '', 'set_import')}${btn('reset', 0, 'bad', 'set_reset')}</div></div>
-          ${native && native.quit ? `<div class="slot spread"><span>Exit to desktop</span>${btn('quit', 0, 'bad', 'set_quit')}</div>` : ''}
-        </div><p class="note" style="margin-top:12px">AstroTech saves every 15 seconds${native ? ' and syncs through Steam Cloud' : ' in this browser'}. Fonts: Silkscreen and VT323 (SIL Open Font License).</p>`;
+          ['Kuiper Jumps', 'r0'], ['Oort Exoduses', 'r1'], ['Stellar Ignitions', 'r2'], ['Galactic Ascents', 'r3'], ['Universe', 'ng']].map(([l, k]) => `<tr><td>${l}</td><td data-k="${k}"></td></tr>`).join('')}</tbody></table>`;
       return h;
     },
     update(S) {
       const st = S.settings;
       const v = { tp: AT.fmtTime(S.stats.totalTime), tr: AT.fmtTime(S.runT), te: money(S.earnedTotal), ter: money(S.earnedRun), tm: fmt(S.stats.missions), tl: fmt(S.stats.losses), td: fmt(S.stats.deaths),
-        tc: fmt(S.stats.contracts), ts: fmt(S.stats.surveyed), to: fmt(S.stats.oreMined) + 't', r0: String(S.layers[0].runs), r1: String(S.layers[1].runs), r2: String(S.layers[2].runs), r3: String(S.layers[3].runs), ng: '#' + (S.ngPlus + 1),
+        tc: fmt(S.stats.contracts), ts: fmt(S.stats.surveyed), to: fmt(S.stats.oreMined) + 't', r0: String(S.layers[0].runs), r1: String(S.layers[1].runs), r2: String(S.layers[2].runs), r3: String(S.layers[3].runs), ng: '#' + (S.ngPlus + 1) };
+      return v;
+    },
+  };
+
+  // =====================================================================
+  // SETTINGS (a modal, opened from the top bar)
+  // =====================================================================
+  let settingsOpen = false, settingsRefs = [];
+  const SETTINGS = {
+    build() {
+      const sg = (act, arg, k, extra) => btn(act, arg, '', k, extra);
+      return `<div class="spread"><h2>Settings</h2><button class="btn gold" data-act="modal-close">DONE</button></div>
+        <div class="set-sect">DISPLAY AND ACCESSIBILITY</div><div class="list">
+          <div class="slot spread"><span>Text size</span><div class="seg">${[['normal', 'NORMAL'], ['large', 'LARGE'], ['xl', 'XL']].map(([k, l]) => btn('set', 'textSize:' + k, '', 'set_ts_' + k, `aria-label="Text size ${l.toLowerCase()}"`)).join('')}</div></div>
+          <div class="slot spread"><span>High contrast</span><div class="seg">${sg('set', 'highContrast', 'set_hc')}</div></div>
+          <div class="slot spread"><span>Reduce motion</span><div class="seg">${sg('set', 'reduceMotion', 'set_rm')}</div></div>
+          <div class="slot spread"><span>CRT scanlines</span><div class="seg">${sg('set', 'scanlines', 'set_scan')}</div></div>
+          <div class="slot spread"><span>Graphics</span><div class="seg">${['low', 'high', 'ultra'].map((k) => sg('set', 'gfx:' + k, 'set_gfx_' + k)).join('')}</div></div>
+          <div class="slot spread"><span>Display</span><div class="seg">${sg('fullscreen', 0, 'set_fs')}</div></div>
+        </div>
+        <div class="set-sect">GAMEPLAY</div><div class="list">
+          <div class="slot spread"><span>Number format</span><div class="seg">${sg('set', 'notation:short', 'set_short')}${sg('set', 'notation:sci', 'set_sci')}</div></div>
+          <div class="slot spread"><span>Ask before resets</span><div class="seg">${sg('set', 'confirm', 'set_confirm')}</div></div>
+          <div class="slot spread"><span>Fleet AI risk limit</span><div class="seg">${[0.1, 0.2, 0.35, 0.5].map((r) => sg('airisk', r, 'air_' + Math.round(r * 100))).join('')}</div></div>
+          <div class="slot spread"><span>Show briefings</span><div class="seg">${sg('set', 'briefings', 'set_brief')}</div></div>
+          <div class="slot spread"><span>Tutorial</span><div class="seg">${sg('tut-replay', 0, 'set_tut')}</div></div>
+        </div>
+        <div class="set-sect">AUDIO</div><div class="list">
+          <div class="slot spread"><span>Sound effects</span><div class="seg">${sg('set', 'sound', 'set_sound')}</div></div>
+        </div>
+        <div class="set-sect">SAVE DATA</div><div class="list">
+          <div class="slot spread"><span>Save, back up or restore</span><div class="seg">${sg('save', 0, 'set_save')}${sg('export', 0, 'set_export')}${sg('import', 0, 'set_import')}${btn('reset', 0, 'bad', 'set_reset')}</div></div>
+          ${native && native.quit ? `<div class="slot spread"><span>Exit to desktop</span>${btn('quit', 0, 'bad', 'set_quit')}</div>` : ''}
+        </div>
+        <p class="note">AstroTech saves every 15 seconds${native ? ' and syncs through Steam Cloud' : ' in this browser'}. Fonts: Silkscreen and VT323 (SIL Open Font License). Keys: 1-0 open consoles, [ ] switch the viewport, A opens Activity, Esc closes.</p>`;
+    },
+    update(S) {
+      const st = S.settings;
+      const v = {
         set_short: { t: '1.23M', cls: { on: st.notation === 'short' } }, set_sci: { t: '1.23e6', cls: { on: st.notation === 'sci' } },
         set_sound: { t: st.sound ? 'ON' : 'OFF', cls: { on: st.sound } }, set_scan: { t: st.scanlines ? 'ON' : 'OFF', cls: { on: st.scanlines } },
         set_brief: { t: st.showBriefings !== false ? 'ON' : 'OFF', cls: { on: st.showBriefings !== false } }, set_tut: { t: 'REPLAY' },
@@ -748,51 +820,114 @@
       return v;
     },
   };
+  function openSettings() {
+    modal(SETTINGS.build(), 'wide');
+    settingsOpen = true;
+    settingsRefs = $$('[data-k]', $('#modal'));
+    apply(SETTINGS.update(E.S), settingsRefs);
+    const first = $('#modal [data-act="modal-close"]'); if (first) first.focus();
+  }
+  function renderSettings() { if (settingsOpen) apply(SETTINGS.update(E.S), settingsRefs); }
 
   // =====================================================================
-  // LOWER-LEFT: flight board & log
+  // MONITOR: flight deck, ops summary, activity drawer, ticker
   // =====================================================================
-  function renderLower() {
-    const S = E.S;
-    const box = $('#lowbody');
-    box.setAttribute('aria-live', lowTab === 'log' ? 'polite' : 'off');
-    box.setAttribute('aria-relevant', 'additions');
-    const s = lowTab + '|' + (lowTab === 'flights' ? S.missions.map((m) => m.id).join() + '|' + S.surveys.map((x) => x.target).join() + '|' + S.builds.map((b) => b.target).join() : '');
-    if (lowTab === 'flights') {
-      if (s !== lowSig) {
-        lowSig = s;
-        let h = '';
-        for (const m of S.missions) {
-          const sh = E.shipById(m.ship), t = E.targetById(m.target);
-          if (!sh || !t) continue;
-          h += `<div class="frow" data-act="flight" data-arg="${t.id}" data-tip="txt:Click to view ${esc(t.name)} in the close-up.">${rk(sh.hull, 24)}<div class="fmain"><div class="fname">${esc(sh.name)} <span>→ ${esc(t.name)}</span></div><div class="bar thin"><i data-fm="${m.id}"></i></div></div><div class="fstate" data-fs="${m.id}"></div></div>`;
-        }
-        for (const sv of S.surveys) { const t = E.targetById(sv.target); if (t) h += `<div class="frow probe"><img class="rk" src="${SPR.icon('probe')}" alt=""><div class="fmain"><div class="fname">Survey probe <span>→ ${esc(t.name)}</span></div><div class="bar thin good"><i data-fv="${t.id}"></i></div></div><div class="fstate">SURVEY</div></div>`; }
-        for (const b of S.builds) { const t = E.targetById(b.target); if (t) h += `<div class="frow build"><img class="rk" src="${SPR.icon('outpost')}" alt=""><div class="fmain"><div class="fname">Construction <span>→ ${esc(t.name)}</span></div><div class="bar thin ice"><i data-fb="${t.id}"></i></div></div><div class="fstate">BUILD</div></div>`; }
-        if (!h) h = '<div class="teaser">NO SHIPS IN FLIGHT. PICK A TARGET IN MISSION CONTROL.</div>';
-        box.innerHTML = h;
-      }
-      for (const m of S.missions) {
-        const bar = box.querySelector(`[data-fm="${m.id}"]`), st = box.querySelector(`[data-fs="${m.id}"]`);
-        if (!bar) continue;
-        bar.style.width = Math.min(100, m.t / m.T * 100) + '%';
-        const ph = m.t < m.out ? 'OUTBOUND' : m.t < m.out + m.mine ? (m.kind === 'exp' ? 'ON SITE' : 'MINING') : 'RETURNING';
-        const txt = ph + ' ' + AT.fmtTime(m.T - m.t);
-        if (st.textContent !== txt) st.textContent = txt;
-      }
-      for (const sv of S.surveys) { const b = box.querySelector(`[data-fv="${sv.target}"]`); if (b) b.style.width = sv.t / sv.T * 100 + '%'; }
-      for (const bd of S.builds) { const b = box.querySelector(`[data-fb="${bd.target}"]`); if (b) b.style.width = bd.t / bd.T * 100 + '%'; }
-    } else if (s !== lowSig) {
-      lowSig = s;
-      box.innerHTML = '';
-      const frag = document.createDocumentFragment();
-      for (const e of S.log.slice(-60)) frag.appendChild(logEl(e));
-      box.appendChild(frag);
-      box.scrollTop = box.scrollHeight;
-    }
-    $('#lt-flights').textContent = `FLIGHTS ${S.missions.length}/${S.pads}`;
-    for (const b of $$('.lowtabs .btn')) b.classList.toggle('active', b.dataset.arg === lowTab);
+  let deckHtml = '', deckStruct = '', opsAt = -1, deckRows = 5, deckAt = 0;
+  let drawerOpen = false, actFilter = 'all', actDirty = true, unread = 0, unreadHot = false;
+  function resetMonitor() { deckStruct = ''; deckHtml = ''; opsAt = -1; actDirty = true; unread = 0; unreadHot = false; if (drawerOpen) fillDrawer(); }
+  // how many flight rows fit under the viewport
+  function deckRoom() {
+    const mon = $('#monitor'), vp = $('.viewport');
+    if (getComputedStyle(mon).overflow !== 'hidden') return 6; // single column: the page scrolls
+    const row = $('#deck .frow'), rh = row ? row.offsetHeight : 40;
+    const avail = mon.clientHeight - vp.offsetHeight - 8 - 96;
+    return Math.max(2, Math.min(10, Math.floor(avail / Math.max(24, rh))));
   }
+  function bestPair(S, M) {
+    let best = null, safe = null;
+    for (const sh of S.ships) {
+      if (!E.canFly(sh, M)) continue;
+      for (const t of S.targets) {
+        if (t.story || E.launchBlock(sh, t, M)) continue;
+        const p = E.plan(sh, t, M);
+        if (p.cargo <= 0) continue;
+        if (!best || p.ev > best.p.ev) best = { sh, t, p };
+        if (p.shownRisk <= S.aiRisk && (!safe || p.ev > safe.p.ev)) safe = { sh, t, p };
+      }
+    }
+    return safe || best;
+  }
+  function renderDeck() {
+    const S = E.S, M = E.mults(), box = $('#deck');
+    const flights = [];
+    for (const m of S.missions) { const sh = E.shipById(m.ship), t = E.targetById(m.target); if (sh && t) flights.push({ k: 'm', id: m.id, m, sh, t, left: m.T - m.t }); }
+    for (const sv of S.surveys) { const t = E.targetById(sv.target); if (t) flights.push({ k: 'v', id: 'v' + t.id, sv, t, left: sv.T - sv.t }); }
+    for (const b of S.builds) { const t = E.targetById(b.target); if (t) flights.push({ k: 'b', id: 'b' + t.id, b, t, left: b.T - b.t }); }
+    const idle = S.ships.filter((s) => E.canFly(s, M)).length;
+    if (!flights.length) {
+      // OPS SUMMARY: nothing is flying
+      const now = performance.now();
+      if (deckStruct !== 'ops') { deckStruct = 'ops'; opsAt = -1; }
+      if (now - opsAt < 500) return;
+      opsAt = now;
+      let h = `<div class="ops panel"><div class="deck-head"><h3>OPS SUMMARY</h3><span class="tog">NOTHING IN FLIGHT</span></div>
+        <div class="ops-stats"><span>PADS <b>${E.padsFree()}/${S.pads}</b> FREE</span><span>IDLE SHIPS <b>${idle}</b>/${S.ships.length}</span></div>`;
+      if (!S.ships.length) h += `<p class="empty">No ships yet. Buy a prospector in the Fleet console.</p><div class="flex"><button class="btn gold" data-act="tab" data-arg="fleet">OPEN FLEET</button></div>`;
+      else {
+        const b = idle && E.padsFree() > 0 ? bestPair(S, M) : null;
+        if (b) {
+          const cls = AT.CLASSES[b.t.cls];
+          h += `<div class="ops-best"><img class="tico" src="${SPR.bodyIcon(b.t)}" alt=""><div class="tmain"><div class="tname">${esc(b.sh.name)} <span class="dim">to</span> ${esc(b.t.name)}</div><div class="tsub">${cls.name} · ${money(b.p.value * b.p.valMult)}/trip · ${AT.fmtTime(b.p.T)} · <em class="${RISKCOL(b.p.shownRisk)}">${pct(b.p.shownRisk)} risk</em></div></div>
+            <button class="btn gold" data-act="launch" data-arg="${b.sh.id}:${b.t.id}" data-tip="txt:Best expected return for an idle ship right now.">LAUNCH<small>${money(b.p.launch)} fee</small></button></div>`;
+        } else if (!idle) h += `<p class="empty">No ship is ready. Hulls may be in repair, or a ship still needs a pilot (Crew).</p>`;
+        else h += `<p class="empty">All launch pads are busy. Build more in Fleet.</p>`;
+      }
+      h += '</div>';
+      if (h !== deckHtml) { deckHtml = h; box.innerHTML = h; }
+      return;
+    }
+    // FLIGHT DECK
+    flights.sort((a, b) => a.left - b.left);
+    const now = performance.now();
+    if (now - deckAt > 400) { deckAt = now; deckRows = deckRoom(); }
+    const shown = flights.slice(0, deckRows), more = flights.length - shown.length;
+    const struct = 'f|' + shown.map((f) => f.id).join() + '|' + more + '|' + idle + '|' + E.padsFree() + (M.flags.flight ? 'F' : '');
+    if (struct !== deckStruct) {
+      deckStruct = struct; deckHtml = '';
+      let h = `<div class="deck panel"><div class="deck-head"><h3>FLIGHT DECK</h3><span class="tog">${S.missions.length}/${S.pads} PADS IN USE</span></div><div class="deck-rows">`;
+      for (const f of shown) {
+        if (f.k === 'm') h += `<div class="frow" data-act="flight" data-arg="${f.t.id}" data-tip="txt:Click to view ${esc(f.t.name)} in the close-up.">${rk(f.sh.hull, 24)}<div class="fmain"><div class="fname">${esc(f.sh.name)} <span>to ${esc(f.t.name)}</span></div><div class="bar thin"><i data-fm="${f.id}"></i></div></div><div class="fstate" data-fs="${f.id}"></div></div>`;
+        else if (f.k === 'v') h += `<div class="frow probe"><img class="rk" src="${SPR.icon('probe')}" alt=""><div class="fmain"><div class="fname">Survey probe <span>to ${esc(f.t.name)}</span></div><div class="bar thin good"><i data-fv="${f.t.id}"></i></div></div><div class="fstate" data-fs="${f.id}"></div></div>`;
+        else h += `<div class="frow build"><img class="rk" src="${SPR.icon('outpost')}" alt=""><div class="fmain"><div class="fname">Construction <span>to ${esc(f.t.name)}</span></div><div class="bar thin ice"><i data-fb="${f.t.id}"></i></div></div><div class="fstate" data-fs="${f.id}"></div></div>`;
+      }
+      h += '</div>';
+      const idleTxt = `<span><b class="gold">${idle}</b> idle ship${idle === 1 ? '' : 's'}${E.padsFree() <= 0 ? ' · pads full' : ''}</span>`;
+      h += `<div class="deck-foot">${more > 0 ? `<button class="btn tiny ghost" data-act="tab" data-arg="fleet">+${more} MORE</button>` : ''}${idleTxt}${M.flags.flight ? `<button class="btn gold" data-act="dispatch" ${idle && E.padsFree() > 0 ? '' : 'disabled'} data-tip="txt:Send every idle ship to its best target under your risk limit.">DISPATCH IDLE</button>` : `<button class="btn tiny" data-act="tab" data-arg="missions">MISSIONS</button>`}</div></div>`;
+      box.innerHTML = h;
+    }
+    for (const f of shown) {
+      const st = box.querySelector(`[data-fs="${f.id}"]`); if (!st) continue;
+      let txt;
+      if (f.k === 'm') {
+        const m = f.m, bar = box.querySelector(`[data-fm="${f.id}"]`);
+        if (bar) bar.style.width = Math.min(100, m.t / m.T * 100) + '%';
+        const ph = m.t < m.out ? 'OUTBOUND' : m.t < m.out + m.mine ? (m.kind === 'exp' ? 'ON SITE' : 'MINING') : 'RETURNING';
+        txt = ph + ' ' + AT.fmtTime(m.T - m.t);
+      } else if (f.k === 'v') { const b = box.querySelector(`[data-fv="${f.t.id}"]`); if (b) b.style.width = f.sv.t / f.sv.T * 100 + '%'; txt = 'SURVEY ' + AT.fmtTime(f.left); }
+      else { const b = box.querySelector(`[data-fb="${f.t.id}"]`); if (b) b.style.width = f.b.t / f.b.T * 100 + '%'; txt = 'BUILD ' + AT.fmtTime(f.left); }
+      if (st.textContent !== txt) st.textContent = txt;
+    }
+  }
+
+  // ---- activity drawer ----
+  const actCats = (e) => {
+    const c = new Set(['all']);
+    if (e.kind === 'warn' || e.kind === 'down') c.add('alerts');
+    if (e.kind === 'story' || e.kind === 'prestige' || e.kind === 'ach') c.add('story');
+    if (/\$|MARKET|QUARTERLY|[Cc]ontract|[Rr]eputation/.test(e.text)) c.add('money');
+    if (c.size === 1 || /returned|aborted|mined out|expedition|survey|online at|pilot level|launch/i.test(e.text)) c.add('missions');
+    return c;
+  };
   function logTime(t) { const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60); return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
   function logEl(entry) {
     const p = document.createElement('p');
@@ -801,31 +936,68 @@
     p.appendChild(tm); p.appendChild(document.createTextNode(entry.text));
     return p;
   }
-  const LOUD = new Set(['story', 'prestige', 'ach', 'warn', 'down']);
-  let lastSay = 0;
-  function addLog(entry) {
-    const tk = $('#ticker');
-    if (tk && (entry.kind === 'story' || entry.kind === 'prestige' || entry.kind === 'ach' || entry.kind === 'up' || entry.kind === 'down' || entry.kind === 'warn')) {
-      tk.textContent = entry.text; tk.className = 'ticker ' + entry.kind; tk.classList.remove('flash'); void tk.offsetWidth; tk.classList.add('flash');
-    }
-    if (lowTab !== 'log') { $('#lt-log').classList.add('new'); return; }
+  function fillDrawer() {
     const box = $('#lowbody');
-    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-    const el = logEl(entry);
+    box.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    let n = 0;
+    for (const e of E.S.log.slice(-80)) if (actCats(e).has(actFilter)) { const el = logEl(e); el.setAttribute('aria-hidden', 'true'); frag.appendChild(el); n++; }
+    if (!n) { const p = document.createElement('p'); p.className = 'none'; p.textContent = actFilter === 'all' ? 'Nothing has happened yet.' : 'Nothing under this filter yet.'; frag.appendChild(p); }
+    box.appendChild(frag);
+    box.scrollTop = box.scrollHeight;
+    for (const b of $$('#drawer [data-act="actfilter"]')) b.classList.toggle('on', b.dataset.arg === actFilter);
+    actDirty = false;
+  }
+  function setDrawer(open) {
+    drawerOpen = !!open;
+    const d = $('#drawer');
+    d.classList.toggle('open', drawerOpen);
+    if (drawerOpen) { d.removeAttribute('inert'); unread = 0; unreadHot = false; fillDrawer(); const c = $('.dr-head .btn', d); if (c) c.focus(); }
+    else { if (d.contains(document.activeElement)) $('#btn-act').focus(); d.setAttribute('inert', ''); }
+    $('#ticker').setAttribute('aria-live', drawerOpen ? 'off' : 'polite');
+    renderActBadge();
+  }
+  function renderActBadge() {
+    const b = $('#act-badge');
+    const txt = unread > 99 ? '99+' : String(unread);
+    if (b.hidden === !unread && b.textContent === txt && b.classList.contains('bad') === unreadHot) return;
+    b.hidden = !unread; b.textContent = txt; b.classList.toggle('bad', unreadHot);
+  }
+  const LOUD = new Set(['story', 'prestige', 'ach', 'warn', 'down']);
+  const NOTABLE = new Set(['story', 'prestige', 'ach', 'up', 'down', 'warn']);
+  let lastSay = 0, tickerTimer = 0;
+  function addLog(entry) {
     // aria-live="polite" announces insertions: only story-level entries, and at most one per 4s, are exposed; the rest are hidden from AT for the instant they are inserted
     const now = performance.now(), loud = LOUD.has(entry.kind) && now - lastSay > 4000;
     if (loud) lastSay = now;
-    else { el.setAttribute('aria-hidden', 'true'); setTimeout(() => el.removeAttribute('aria-hidden'), 60); }
+    const quiet = (el) => { if (!loud) { el.setAttribute('aria-hidden', 'true'); setTimeout(() => el.removeAttribute('aria-hidden'), 60); } };
+    const tk = $('#ticker');
+    if (tk && NOTABLE.has(entry.kind)) {
+      const sp = document.createElement('span'); sp.textContent = entry.text; quiet(sp);
+      tk.innerHTML = ''; tk.appendChild(sp);
+      tk.className = 'ticker show flash ' + entry.kind; void tk.offsetWidth;
+      clearTimeout(tickerTimer); tickerTimer = setTimeout(() => tk.classList.remove('show'), 7000);
+    }
+    if (!drawerOpen) { unread++; if (entry.kind === 'warn' || entry.kind === 'down') unreadHot = true; actDirty = true; return; }
+    if (!actCats(entry).has(actFilter)) return;
+    const box = $('#lowbody');
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    const none = box.querySelector('.none'); if (none) none.remove();
+    const el = logEl(entry); quiet(el);
     box.appendChild(el);
     while (box.children.length > 80) box.firstChild.remove();
     if (near) box.scrollTop = box.scrollHeight;
   }
 
-  // directive strip
+  // board order pill (top bar)
   function renderDirective() {
-    const d = E.directive(), el = $('#directive');
-    const txt = d ? `DIRECTIVE ${E.S.dirIdx + 1}/${AT.DIRECTIVES.length}: ${d.text}` : 'ALL BOARD DIRECTIVES COMPLETE.';
-    if (el.textContent !== txt) el.textContent = txt;
+    const S = E.S, d = E.directive(), el = $('#directive'), n = AT.DIRECTIVES.length;
+    const html = d ? `<span class="dp-k">BOARD ORDER</span><b class="dp-n">${S.dirIdx + 1}/${n}</b><span class="dp-t">${esc(d.text)}</span><span class="dp-bar"><i style="width:${Math.round(S.dirIdx / n * 100)}%"></i></span>`
+      : `<span class="dp-k">BOARD ORDERS</span><span class="dp-t">ALL COMPLETE</span><span class="dp-bar"><i style="width:100%"></i></span>`;
+    if (el._h !== html) {
+      el._h = html; el.innerHTML = html; el.classList.toggle('done', !d);
+      el.dataset.tip = 'txt:' + (d ? `Board order ${S.dirIdx + 1} of ${n}: ${d.text.replace(/"/g, '')} Click to see all orders.` : 'All Board orders are complete.');
+    }
   }
 
   // decision cards
@@ -889,6 +1061,7 @@
     const lc = $('#st-layers');
     if (lc._h !== lh) { lc.innerHTML = lh; lc._h = lh; }
     $('#btn-sound').innerHTML = `<img class="ico pixel" src="${SPR.icon(S.settings.sound ? 'sound' : 'mute')}" alt="Sound">`;
+    renderActBadge();
     $('#strike').hidden = !S.strike;
     $('#challenge-tag').hidden = !S.challenge;
     if (S.challenge) setText('#challenge-tag', 'CHALLENGE: ' + E.challengeDef(S.challenge).name.toUpperCase());
@@ -977,7 +1150,10 @@
       case 'tab': tab = arg; S.reveal['new_' + arg] = 0; sig = null; $('#tabbody').scrollTop = 0; AT.audio.play('tab'); renderTabs(); break;
       case 'view': AT.scene.setView(arg); AT.audio.play('tab'); break;
       case 'mapreg': AT.scene.setMapRegion(+arg); break;
-      case 'low': lowTab = arg; lowSig = null; if (arg === 'log') $('#lt-log').classList.remove('new'); break;
+      case 'activity': setDrawer(!drawerOpen); break;
+      case 'actfilter': actFilter = arg; fillDrawer(); break;
+      case 'settings': openSettings(); break;
+      case 'collapse': { const c = S.settings.collapsed = S.settings.collapsed || {}; c[arg] = !c[arg]; sig = null; break; }
       case 'seltarget': selectTarget(+arg); break;
       case 'closeup': S.selTarget = +arg; AT.scene.setView('target'); break;
       case 'flight': S.selTarget = +arg; AT.scene.setView('target'); sig = null; break;
@@ -1044,7 +1220,7 @@
         sig = null; break;
       }
       case 'tut-next': case 'tut-step': case 'tut-skip': case 'brief-ok': AT.guide.act(name, arg); break;
-      case 'tut-replay': AT.guide.act(name, arg); tab = 'missions'; sig = null; renderTabs(); break;
+      case 'tut-replay': closeModal(); AT.guide.act(name, arg); tab = 'missions'; sig = null; renderTabs(); break;
       case 'manual': AT.guide.act(name, arg); sig = null; break;
       case 'brief-go': AT.guide.act('brief-ok'); return act('tab', arg, el);
       case 'fullscreen': toggleFullscreen(); break;
@@ -1091,8 +1267,8 @@
     setTimeout(() => d.remove(), 4200);
   }
   UI.toast = toast;
-  function modal(html) { const m = $('#modal'); m.innerHTML = `<div class="panel">${html}</div>`; m.hidden = false; }
-  function closeModal() { $('#modal').hidden = true; $('#modal').innerHTML = ''; }
+  function modal(html, cls) { const m = $('#modal'); settingsOpen = false; m.innerHTML = `<div class="panel ${cls || ''}" role="dialog" aria-modal="true">${html}</div>`; m.hidden = false; }
+  function closeModal() { settingsOpen = false; $('#modal').hidden = true; $('#modal').innerHTML = ''; }
   function showExport() {
     let code = '';
     try { code = btoa(unescape(encodeURIComponent(E.save()))); } catch (e) { code = ''; }
@@ -1110,10 +1286,10 @@
     let s = null;
     try { s = E.load(decodeURIComponent(escape(atob(raw)))); } catch (e) { s = null; }
     if (!s) { $('#imp-err').textContent = 'That code could not be read. Check that the whole code was pasted, and that it came from this version.'; return; }
-    E.S = s; E.touch(); applySettings(); AT.guide.reset(); sig = null; lowSig = null; closeModal(); saveGame(); toast('stats', 'IMPORTED', 'Save loaded.');
+    E.S = s; E.touch(); applySettings(); AT.guide.reset(); sig = null; resetMonitor(); closeModal(); saveGame(); toast('stats', 'IMPORTED', 'Save loaded.');
   }
   function showReset() { modal(`<h2>Wipe Save?</h2><p class="note">This deletes all progress, including expansions, artifacts and achievements. It cannot be undone.</p><div class="flex"><button class="btn bad" data-act="do-reset">WIPE EVERYTHING</button><button class="btn" data-act="modal-close">KEEP MY GAME</button></div>`); }
-  function doReset() { E.newGame(); applySettings(); AT.guide.reset(); sig = null; lowSig = null; tab = 'missions'; closeModal(); saveGame(); }
+  function doReset() { E.newGame(); applySettings(); AT.guide.reset(); sig = null; resetMonitor(); tab = 'missions'; closeModal(); saveGame(); }
   function showEnding() {
     const S = E.S;
     const d = document.createElement('div');
@@ -1194,6 +1370,7 @@
     document.documentElement.style.setProperty('--cur-arrow', `url("${SPR.cursor('arrow')}") 0 0, default`);
     document.documentElement.style.setProperty('--cur-btn', `url("${SPR.cursor('arrow')}") 0 0, pointer`);
     $('#brand-ico').src = SPR.icon('rocket');
+    if (window.ResizeObserver) new ResizeObserver(() => document.documentElement.style.setProperty('--tb-h', $('.topbar').offsetHeight + 'px')).observe($('.topbar'));
     for (const el of $$('[data-ico]')) el.src = SPR.icon(el.dataset.ico);
 
     AT.hooks.log = () => {};
@@ -1204,7 +1381,7 @@
     AT.hooks.event = (kind, arg) => {
       if (kind === 'region') toast('expansion', 'NEW SECTOR', AT.REGIONS[arg].name);
       if (kind === 'demoend') showDemoEnd();
-      if (kind === 'prestige') { AT.scene.burst(); AT.audio.play('prestige'); sig = null; lowSig = null; }
+      if (kind === 'prestige') { AT.scene.burst(); AT.audio.play('prestige'); sig = null; resetMonitor(); }
       if (kind === 'artifact') toast('gem', 'ARTIFACT', AT.ARTIFACTS[arg].name);
       if (kind === 'expedition') toast('star', 'EXPEDITION', E.EXP[arg].name);
       if (kind === 'directive') { AT.audio.play('ach'); }
@@ -1214,7 +1391,6 @@
     let away = 0;
     if (loaded) { E.S = loaded; E.touch(); away = (Date.now() - (loaded.saved || Date.now())) / 1000; }
     else E.newGame();
-    const tk = $('#ticker'); const last = E.S.log.filter((e) => e.kind === 'story').pop(); if (last) tk.textContent = last.text;
     AT.hooks.log = addLog;
     if (native && native.achievement) for (const id in E.S.ach) native.achievement(id);
 
@@ -1231,7 +1407,7 @@
     }
     bindEvents();
     if (DEMO && E.S.layers[0].runs > 0) showDemoEnd(); // e.g. a full-game save imported into the demo
-    updateReveal(); AT.guide.start(); renderTabs(); render(); updateTop(); renderLower(); renderDirective(); renderViewBar();
+    updateReveal(); AT.guide.start(); renderTabs(); render(); updateTop(); renderDeck(); renderDirective(); renderViewBar();
     const hot = window.claude && window.claude.hot;
     if (hot && hot.snapshot) hot.snapshot(() => ({ save: E.save() }));
     let lastT = performance.now(), uiAcc = 0, saveAcc = 0, lastSeen = performance.now();
@@ -1240,7 +1416,7 @@
       if (dt > 5) E.simulate(Math.min(dt, E.offlineCap())); else if (dt > 0) E.tick(Math.min(dt, 1));
       AT.scene.frame(Math.min(dt, 0.1));
       uiAcc += dt; saveAcc += dt;
-      if (uiAcc >= 0.1) { uiAcc = 0; updateReveal(); renderTabs(); render(); updateTop(); renderLower(); renderDirective(); renderCard(); renderViewBar(); AT.guide.tick(); placeTip(); }
+      if (uiAcc >= 0.1) { uiAcc = 0; updateReveal(); renderTabs(); render(); updateTop(); renderDeck(); renderDirective(); renderCard(); renderViewBar(); AT.guide.tick(); placeTip(); }
       AT.guide.frame();
       if (saveAcc >= 15) { saveAcc = 0; saveGame(); }
       requestAnimationFrame(frame);
@@ -1255,6 +1431,7 @@
   };
   function bindEvents() {
     document.addEventListener('click', (e) => {
+      if (settingsOpen && e.target.id === 'modal') { closeModal(); return; }
       const el = e.target.closest('[data-act]');
       if (!el || el.disabled) return;
       if (el.dataset.rep && el._repeated) { el._repeated = false; return; }
@@ -1266,6 +1443,24 @@
         const again = $$('[data-act]').find((x) => x.dataset.act === a && x.dataset.arg === g);
         if (again) again.focus();
       }
+    });
+    // shortcuts: 1-9,0 open consoles in rail order, [ ] cycle the viewport, A toggles Activity, Esc closes the modal or drawer
+    document.addEventListener('keydown', (e) => {
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      const g = e.target, tn = g && g.tagName;
+      if (e.key === 'Escape') {
+        if (!$('#modal').hidden) { closeModal(); e.preventDefault(); } else if (drawerOpen) { setDrawer(false); e.preventDefault(); }
+        return;
+      }
+      if (tn === 'INPUT' || tn === 'TEXTAREA' || tn === 'SELECT' || (g && g.isContentEditable)) return;
+      if (!$('#modal').hidden || $('#ending')) return;
+      if (/^[0-9]$/.test(e.key)) {
+        const ids = navKeys(), id = ids[e.key === '0' ? 9 : +e.key - 1];
+        if (id) { e.preventDefault(); act('tab', id); }
+      } else if (e.key === '[' || e.key === ']') {
+        const vs = ['map', 'launch', 'target'], i = vs.indexOf(AT.scene.getView());
+        act('view', vs[(i + (e.key === ']' ? 1 : vs.length - 1)) % vs.length]); e.preventDefault();
+      } else if (e.key === 'a' || e.key === 'A') { act('activity'); e.preventDefault(); }
     });
     // non-button [data-act] elements (rows) behave as buttons from the keyboard
     document.addEventListener('keydown', (e) => {

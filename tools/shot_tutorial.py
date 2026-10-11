@@ -131,6 +131,7 @@ with sync_playwright() as p:
     check(pg.locator('.man.locked').count() > 0, 'locked entries should show as Classified')
     shot('f1_field_manual')
     # settings: toggle + replay
+    pg.click('[data-act=settings]'); pg.wait_for_timeout(300)  # settings are a modal now
     pg.evaluate("document.querySelector('[data-k=set_brief]').scrollIntoView({block:'center'})"); pg.wait_for_timeout(200)
     shot('f2_settings')
     pg.click('[data-k=set_brief]'); pg.wait_for_timeout(200)

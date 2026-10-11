@@ -13,38 +13,50 @@
       <span class="challenge-tag" id="challenge-tag" hidden></span>
       <span class="demo-tag" id="demo-tag" hidden>DEMO</span>
     </div>
+    <button class="btn gold dir-pill" id="directive" data-act="tab" data-arg="archive"></button>
     <div class="topbtns">
+      <button class="btn" id="btn-act" data-act="activity" data-tip="txt:Activity log (A)" aria-label="Activity log" aria-keyshortcuts="A"><img class="ico pixel" data-ico="scroll" alt=""><span class="nbadge" id="act-badge" hidden></span></button>
       <button class="btn" id="btn-sound" data-act="sound-top" data-tip="txt:Sound on or off" aria-label="Toggle sound"></button>
-      <button class="btn" data-act="tab" data-arg="archive" data-tip="txt:Archive: directives, artifacts, achievements and settings" aria-label="Archive and settings"><img class="ico pixel" data-ico="stats" alt=""></button>
+      <button class="btn" id="btn-settings" data-act="settings" data-tip="txt:Settings: display, accessibility, saving" aria-label="Settings"><img class="ico pixel" data-ico="stats" alt=""></button>
     </div>
   </header>
-  <main>
-    <section class="left">
-      <div class="viewport panel">
-        <div class="vbar" id="vbar">
-          <button class="btn tiny on" data-act="view" data-arg="map">SYSTEM MAP</button>
-          <button class="btn tiny" data-act="view" data-arg="launch">LAUNCH COMPLEX</button>
-          <button class="btn tiny" data-act="view" data-arg="target">CLOSE-UP</button>
-          <span class="vregs" id="vregs"></span>
-        </div>
-        <div class="scene-wrap scan">
-          <canvas id="scene" aria-label="Main viewport. On the system map, click a target to plan a mission."></canvas>
-          <div id="cardbox" hidden></div>
-          <div class="strike-banner" id="strike" hidden>CREW ON STRIKE</div>
-        </div>
-        <div class="ticker" id="ticker"></div>
-        <div class="directive" id="directive"></div>
-      </div>
-      <div class="lower panel">
-        <div class="lowtabs"><button class="btn tiny active" data-act="low" data-arg="flights" id="lt-flights">FLIGHTS</button><button class="btn tiny" data-act="low" data-arg="log" id="lt-log">MISSION LOG<span class="dot"></span></button></div>
-        <div id="lowbody" aria-live="polite"></div>
-      </div>
-    </section>
-    <section class="right panel">
-      <nav class="tabs" id="tabs"></nav>
-      <div class="tabbody" id="tabbody"></div>
-    </section>
+  <nav class="rail panel" id="tabs" aria-label="Consoles"></nav>
+  <main class="console panel">
+    <div class="tabbody" id="tabbody"></div>
   </main>
+  <aside class="monitor" id="monitor" aria-label="Monitor">
+    <div class="viewport panel">
+      <div class="vbar" id="vbar">
+        <div class="segctl" role="group" aria-label="Viewport view">
+          <button class="btn tiny on" data-act="view" data-arg="map" aria-keyshortcuts="[ ]">MAP</button>
+          <button class="btn tiny" data-act="view" data-arg="launch">LAUNCH</button>
+          <button class="btn tiny" data-act="view" data-arg="target">CLOSE-UP</button>
+        </div>
+        <span class="vregs" id="vregs"></span>
+      </div>
+      <div class="scene-wrap scan">
+        <canvas id="scene" aria-label="Main viewport. On the system map, click a target to plan a mission."></canvas>
+        <div id="cardbox" hidden></div>
+        <div class="strike-banner" id="strike" hidden>CREW ON STRIKE</div>
+        <div class="ticker" id="ticker" aria-live="polite" aria-relevant="additions"></div>
+      </div>
+    </div>
+    <div id="deck"></div>
+    <section class="drawer" id="drawer" aria-label="Activity" inert><div class="dr-in panel">
+      <div class="dr-head">
+        <h3>ACTIVITY</h3>
+        <button class="btn tiny ghost" data-act="activity" aria-label="Close activity">CLOSE</button>
+      </div>
+      <div class="segctl dr-filters" role="group" aria-label="Filter activity">
+        <button class="btn tiny on" data-act="actfilter" data-arg="all">ALL</button>
+        <button class="btn tiny" data-act="actfilter" data-arg="missions">MISSIONS</button>
+        <button class="btn tiny" data-act="actfilter" data-arg="money">MONEY</button>
+        <button class="btn tiny" data-act="actfilter" data-arg="story">STORY</button>
+        <button class="btn tiny" data-act="actfilter" data-arg="alerts">ALERTS</button>
+      </div>
+      <div class="dr-log" id="lowbody" aria-live="polite" aria-relevant="additions"></div>
+    </div></section>
+  </aside>
 </div>
 <div id="tooltip" hidden></div>
 <div id="toasts"></div>

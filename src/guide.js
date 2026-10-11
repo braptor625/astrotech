@@ -100,7 +100,7 @@
         frame.style.width = Math.round(r.width + p * 2) + 'px'; frame.style.height = Math.round(r.height + p * 2) + 'px';
       }
     }
-    place(panel, r, !!(t.el && t.el.closest('#tabbody, #tabs')));
+    place(panel, r, !!(t.el && t.el.closest('#tabbody')));
   }
   function place(panel, r, vertFirst) {
     const vw = innerWidth, vh = innerHeight, m = 10, g = 20;

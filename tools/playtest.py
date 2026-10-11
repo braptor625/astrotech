@@ -43,7 +43,7 @@ with sync_playwright() as p:
     def money_txt(): return pg.inner_text('#st-money')
     def dir_txt(): return pg.inner_text('#directive').strip()
     def dir_no():
-        m = re.match(r'DIRECTIVE (\d+)/', dir_txt())
+        m = re.search(r'(\d+)/\d+', dir_txt())
         return int(m.group(1)) if m else 99
 
     def log(msg):
@@ -69,7 +69,7 @@ with sync_playwright() as p:
     def overflow_check(name):
         r = pg.evaluate("""() => { const bad=[]; const de=document.documentElement;
           if (de.scrollWidth > de.clientWidth+1) bad.push('page scrollWidth '+de.scrollWidth);
-          for (const el of document.querySelectorAll('#tabbody *, #directive, .ticker, #lowbody *, .chip')) {
+          for (const el of document.querySelectorAll('#tabbody *, #directive, .ticker, #deck *, .chip')) {
             if (el.children.length===0 && el.textContent.trim() && el.scrollWidth > el.clientWidth+2 && getComputedStyle(el).overflow!=='visible') bad.push((el.className||el.tagName)+':'+el.textContent.trim().slice(0,30)); }
           return bad.slice(0,4); }""")
         if r:
@@ -250,10 +250,13 @@ with sync_playwright() as p:
         return 'idle'     # earn / complete N missions / reputation: just keep operating
 
     # ---- background routine (what a player does while waiting) ----------
+    def ssub_texts():  # read in one go: the panel re-renders under us
+        return pg.evaluate("() => Array.from(document.querySelectorAll('#tabbody .ssub')).filter(e => e.offsetParent).map(e => e.innerText)")
+
     def maintenance_and_growth():
         # repair a worn ship (the risk number visibly climbs as hull drops)
         if open_tab('missions'):
-            worn = [int(m.group(1)) for e in vis('#tabbody .ssub') for m in [re.search(r'hull (\d+)%', e.inner_text())] if m]
+            worn = [int(m.group(1)) for tx in ssub_texts() for m in [re.search(r'hull (\d+)%', tx)] if m]
             if worn and min(worn) < 70 and open_tab('fleet'):
                 for e in vis('[data-act=repair]'):
                     if e.is_enabled() and 'REPAIR' in e.inner_text().upper():
@@ -280,7 +283,7 @@ with sync_playwright() as p:
                 issue('broke_noship', f'fleet is empty and cannot afford a ship (money {money_txt()})')
         if launch_idle(why='auto-routine', careful=gt() > 120) == 0:
             # the ship row says "NO PILOT" when a pilot is what blocks the launch
-            if open_tab('missions') and any('NO PILOT' in e.inner_text() for e in vis('#tabbody .ssub')):
+            if open_tab('missions') and any('NO PILOT' in tx for tx in ssub_texts()):
                 hire_pilots()
 
     # ---- main loop ------------------------------------------------------
@@ -293,7 +296,7 @@ with sync_playwright() as p:
         dismiss_guides()
         handle_cards()
         d = dir_no()
-        text = re.sub(r'^DIRECTIVE \d+/\d+:\s*', '', dir_txt())
+        text = re.sub(r'^BOARD ORDERS?\s*\d+/\d+\s*', '', dir_txt()).strip()
         res = do_directive(text)
         if res not in (True, 'idle'):
             key = f'cantdo_{d}'

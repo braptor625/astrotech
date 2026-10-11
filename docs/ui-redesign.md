@@ -77,3 +77,44 @@ The pixel-art identity stays: Silkscreen and VT323, notched bevelled panels, and
 - `#cardbox` (incident cards), `#modal`, `#tooltip`, `#toasts` and the tutorial overlay and briefing card must still position correctly in the new layout.
 - The demo build (`node tools/build.mjs --demo`) and its end screen still work.
 - Tests: `node tools/build.mjs` and `--demo`; `python3 tools/shot.py <dir> [W] [text] [H]` at 1366×800, 1920×1080 and 1280×720 at large and xl; `python3 tools/shot_demo.py`; `python3 tools/shot_tutorial.py <dir>`; `python3 tools/playtest.py <dir>`. Everything prints no console errors, and there's no horizontal overflow.
+
+## Components (phase 1, for the `PANELS.*` rebuilds)
+
+All live in `style.css`. A console renders into `#tabbody`, which is a container (`container-name: con`), so `.md` reacts to the console width, not the window.
+
+**`.con-head`**: header. Helper: `conHead(title, purpose, actionHTML)` in `ui.js` (also `AT.ui.conHead`). Every existing console already uses it.
+```html
+<div class="con-head"><div class="ch-title"><h2>Market</h2><p class="purpose">Sell ore and deliver contracts.</p></div>
+  <div class="ch-act"><button class="btn gold" data-act="sellall">SELL EVERYTHING</button></div></div>
+```
+
+**`.sect` / `.sect-head`**: the only bevelled box inside a console. Helper: `sect(key, title, {count, ctl}, bodyHTML)` with `key = 'console:section'`. The title is a button (`data-act="collapse"`) that toggles `S.settings.collapsed[key]`; the act clears the panel `sig`, so rebuild reads `isCollapsed(key)` (also `AT.ui.isCollapsed`).
+```html
+<section class="sect"><div class="sect-head"><h3><button class="sect-tog" data-act="collapse" data-arg="market:contracts" aria-expanded="true">Contracts</button></h3>
+  <span class="count">3</span><div class="sect-ctl"><button class="btn tiny">REFRESH</button></div></div><div class="sect-body">...rows...</div></section>
+```
+
+**`.row`**: flat dense row, hairline separators. Set the grid with `--cols`; put numbers in `.num` (right-aligned, tabular). `.row.sel` gets the gold edge. At most one gold button per row. (The old crew staff row is `.row.slot`, which keeps its legacy layout until phase 2 replaces it.)
+```html
+<div class="row sel" style="--cols:28px minmax(0,1fr) 90px auto" data-act="seltarget" data-arg="12"><img class="tico" src="..."><span>2187 BP85 Ludmila <span class="dim">S-type</span></span><span class="num">$24.1K</span><button class="btn gold tiny">LAUNCH</button></div>
+```
+
+**`.md`**: master-detail. Side by side (list left, detail right, detail sticky) when the console is 900px or wider; below that the detail comes first, stacked above the list.
+```html
+<div class="md"><div class="md-list">...rows...</div><div class="md-detail">...detail card...</div></div>
+```
+
+**`.empty`**: a one-line dim empty state with a hint of what unlocks it.
+```html
+<p class="empty">No contracts on the board. Clients call every few minutes.</p>
+```
+
+**Buttons**: `.btn.gold` or `.btn.primary` (one per region), plain `.btn` (secondary, blue), `.btn.ghost` or `.quiet` (tertiary), `.btn.bad` or `.danger` (destructive, needs a confirm; see `act('scrap')` for the click-again pattern). Disabled buttons set `tip: 'txt:why'` through the binder.
+
+**Shell hooks you can rely on**
+- Rail items: `button.tab[data-act=tab][data-arg=id]` inside `#tabs`; the badge rules live in `navBadges()` in `ui.js`. Add a console by adding it to `TABS` (rail order, group) and `updateReveal()`.
+- Keys: `1`-`0` consoles (rail order), `[` `]` viewport, `A` Activity, `Esc` closes modal or drawer. Don't bind these in a console.
+- Toasts: `AT.ui.toast(icon, title, text)`, top-right, max 2.
+- Modals: `modal(html, 'wide')`. Settings is a modal (`data-act="settings"`), no longer part of Archive.
+- Flight Deck / Ops summary are rendered into `#deck` by `renderDeck()`; Activity entries come from `S.log` (kinds: info, up, down, warn, story, prestige, ach).
+- Briefing card: fixed bottom-right (it sits over the Flight Deck area, clear of the toasts and the viewport decision cards). The Activity drawer slides over the monitor column.

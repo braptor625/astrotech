@@ -25,6 +25,8 @@ with sync_playwright() as p:
     if TEXT:
         pg.evaluate("t => { AT.E.S.settings.textSize = t; document.documentElement.dataset.text = t; }", TEXT); pg.wait_for_timeout(300)
     pg.screenshot(path=str(out / '00_start.png'))
+    pg.click('[data-act=tut-skip]'); pg.wait_for_timeout(400)  # the tutorial dim would hide the layout in every later shot
+    pg.screenshot(path=str(out / '00b_fresh.png'))  # empty states: no ships, ops summary, no flights
     # opening: buy a ship, pick the surveyed target, launch
     pg.click('[data-act=tab][data-arg=fleet]'); pg.wait_for_timeout(200)
     pg.click('[data-act=buyship][data-arg=prospector]'); pg.wait_for_timeout(200)
@@ -34,6 +36,7 @@ with sync_playwright() as p:
     pg.screenshot(path=str(out / '02_target.png'))
     pg.click('[data-act=launch] >> nth=0'); pg.wait_for_timeout(1800)
     pg.screenshot(path=str(out / '03_launch.png'))
+    if not pg.locator('#deck .deck').count(): errors.append('flight deck missing while a ship is flying')
     pg.click('[data-act=view][data-arg=map]'); pg.wait_for_timeout(600)
     pg.screenshot(path=str(out / '04_map.png'))
     # fast-forward a mid game
@@ -52,6 +55,29 @@ with sync_playwright() as p:
             r = pg.evaluate(SCAN)
             if r: scans[t] = r
         else: errors.append(f'missing tab {t}')
+    pg.click('[data-act=tab][data-arg=missions]'); pg.wait_for_timeout(300)
+    pg.screenshot(path=str(out / '14_midgame_flights.png'))
+    # activity drawer: open, filter, close; keyboard shortcuts
+    pg.click('[data-act=activity]'); pg.wait_for_timeout(500)
+    pg.screenshot(path=str(out / '15_drawer.png')); r = pg.evaluate(SCAN)
+    if r: scans['drawer'] = r
+    pg.click('[data-act=actfilter][data-arg=alerts]'); pg.wait_for_timeout(300); pg.screenshot(path=str(out / '16_drawer_alerts.png'))
+    pg.keyboard.press('Escape'); pg.wait_for_timeout(400)
+    if pg.evaluate("document.querySelector('#drawer').classList.contains('open')"): errors.append('Esc did not close the drawer')
+    pg.keyboard.press('a'); pg.wait_for_timeout(300)
+    if not pg.evaluate("document.querySelector('#drawer').classList.contains('open')"): errors.append('A did not open the drawer')
+    pg.keyboard.press('a'); pg.wait_for_timeout(300)
+    pg.keyboard.press('2'); pg.wait_for_timeout(200)
+    if pg.evaluate("document.querySelector('#tabs .tab.active').dataset.arg") != 'fleet': errors.append('key 2 did not open Fleet')
+    pg.keyboard.press(']'); pg.wait_for_timeout(200)
+    if pg.evaluate('AT.scene.getView()') != 'launch': errors.append('] did not cycle the view')
+    pg.keyboard.press('1'); pg.wait_for_timeout(200)
+    # settings modal
+    pg.click('[data-act=settings]'); pg.wait_for_timeout(400); pg.screenshot(path=str(out / '17_settings.png'))
+    r = pg.evaluate(SCAN)
+    if r: scans['settings'] = r
+    pg.keyboard.press('Escape'); pg.wait_for_timeout(300)
+    if pg.evaluate("!document.querySelector('#modal').hidden"): errors.append('Esc did not close the settings modal')
     pg.click('[data-act=view][data-arg=launch]'); pg.wait_for_timeout(500); pg.screenshot(path=str(out / '11_launchmid.png'))
     pg.click('[data-act=view][data-arg=target]'); pg.wait_for_timeout(500); pg.screenshot(path=str(out / '12_closeup.png'))
     # an incident card
@@ -63,6 +89,10 @@ with sync_playwright() as p:
     pg.click('[data-act=tab][data-arg=expansion]'); pg.wait_for_timeout(500); pg.screenshot(path=str(out / '20_late_expansion.png'))
     pg.click('[data-act=view][data-arg=map]'); pg.wait_for_timeout(200)
     pg.click('[data-act=mapreg][data-arg="3"]'); pg.wait_for_timeout(400); pg.screenshot(path=str(out / '21_map_stars.png'))
+    pg.set_viewport_size({'width': 1000, 'height': 760}); pg.wait_for_timeout(500)
+    pg.click('[data-act=tab][data-arg=missions]'); pg.wait_for_timeout(300)
+    pg.screenshot(path=str(out / '29_narrow_1000.png'))
+    if pg.evaluate('document.documentElement.scrollWidth') > 1000: errors.append('horizontal overflow at 1000px')
     pg.set_viewport_size({'width': 420, 'height': 900}); pg.wait_for_timeout(500)
     pg.screenshot(path=str(out / '30_phone.png'), full_page=True)
     sw = pg.evaluate('document.documentElement.scrollWidth')

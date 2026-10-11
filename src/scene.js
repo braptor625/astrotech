@@ -29,7 +29,7 @@
   SC.resize = function () {
     if (!cv) return;
     const cssW = cv.parentElement.clientWidth || 768;
-    scale = cssW >= 1150 ? 3 : cssW >= 360 ? 2 : 1;
+    scale = cssW >= 680 ? 3 : cssW >= 360 ? 2 : 1; // the monitor column is ~700px at 1920 and ~500px at 1366
     W = Math.max(200, Math.round(cssW / scale));
     H = Math.round(W * 9 / 16);
     cv.width = W; cv.height = H;
