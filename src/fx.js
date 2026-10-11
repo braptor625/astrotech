@@ -164,7 +164,7 @@
   D.steam = def({ ramp: RP.steam, layer: 0, prio: 0, life: [1.4, 2.8], spd: [14, 48], spread: 1.1, s0: [3, 6], s1: [10, 16], drag: 1.2, grav: -11, wind: 0.5, fade: 1, dir: -HALF });
   D.steamN = def(Object.assign({}, D.steam, { ramp: RP.steamN }));
   D.groundGlow = def({ ramp: RP.glowDim, kind: 1, life: [0.06, 0.08], s0: 41, s1: 41, prio: 0 });
-  D.dust = def({ ramp: RP.dust, layer: 0, prio: 0, life: [0.8, 1.5], spd: [60, 140], spread: 0.2, s0: [2, 3], s1: [5, 8], drag: 2.4, grav: -3, wind: 0.2, fade: 1 });
+  D.dust = def({ ramp: RP.dust, layer: 0, prio: 0, life: [0.5, 1.0], spd: [50, 120], spread: 0.35, s0: [2, 3], s1: [4, 6], drag: 2.6, grav: -16, wind: 0.3, fade: 1 }); // billows up and clears, so a held ignition never paints a flat band
   D.dustN = def(Object.assign({}, D.dust, { ramp: RP.dustN }));
   D.soot = def({ ramp: RP.soot, layer: 0, prio: 0, life: [1.2, 2.2], spd: [4, 22], spread: TAU, s0: [2, 3], s1: [6, 10], drag: 1, grav: -4, wind: 0.5, fade: 1 });
   // explosion pieces
@@ -196,6 +196,8 @@
   const NR = 64; const rx = F(NR), ry_ = F(NR), rr0 = F(NR), rr1 = F(NR), rage = F(NR), rlife = F(NR), rsq = F(NR);
   const rview = new Uint8Array(NR), rramp = new Uint8Array(NR), rstyle = new Uint8Array(NR), rthick = new Uint8Array(NR), ron = new Uint8Array(NR);
   function ring(view, x, y, r0, r1, life, rampId, squash, thick, style) {
+    // after a fast-forward or offline catch-up many launches/landings fire on one pad at once: one young ring per spot
+    for (let i = 0; i < NR; i++) if (ron[i] && rview[i] === view && Math.abs(rx[i] - x) < 4 && Math.abs(ry_[i] - y) < 4 && rage[i] < rlife[i] * 0.5) return;
     for (let i = 0; i < NR; i++) if (!ron[i]) {
       ron[i] = 1; rx[i] = x; ry_[i] = y; rr0[i] = r0; rr1[i] = r1; rage[i] = 0; rlife[i] = life; rsq[i] = squash; rview[i] = view; rramp[i] = rampId; rthick[i] = thick; rstyle[i] = style || 0; return;
     }
@@ -310,8 +312,8 @@
       emit(D.groundGlow, v, x, ground - 6, 1);
       emit(stm, v, x - 9, ground - 1, cntS(20 * gk, dt), Math.PI * 1.05, 1.0, 1);
       emit(stm, v, x + 9, ground - 1, cntS(20 * gk, dt), -0.05 * Math.PI, 1.0, 1);
-      emit(dustRamp(dark), v, x, ground - 1, cntS(22 * gk, dt), Math.PI, 0.18);
-      emit(dustRamp(dark), v, x, ground - 1, cntS(22 * gk, dt), 0, 0.18);
+      emit(dustRamp(dark), v, x, ground - 1, cntS(12 * gk, dt), Math.PI, 0.18);
+      emit(dustRamp(dark), v, x, ground - 1, cntS(12 * gk, dt), 0, 0.18);
       emit(smk, v, x, ground - 1, cntS(16 * gk, dt), Math.PI, 0.5); emit(smk, v, x, ground - 1, cntS(16 * gk, dt), 0, 0.5);
       emit(D.flameJet, v, x, ground - 1, cnt(26 * gk * thr, dt), Math.PI, 0.2); emit(D.flameJet, v, x, ground - 1, cnt(26 * gk * thr, dt), 0, 0.2);
     }
