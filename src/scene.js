@@ -12,6 +12,7 @@
   const arrSeen = {};
   let launches = [], landings = [], booms = [];
   let padOf = {};
+  let skyCache = null;
   const cb = {};
   SC.cb = cb;
 
@@ -388,14 +389,23 @@
     const horizon = H - Math.round(MU * 0.3);
     // sky bands with dithering (taller sky gets more bands)
     const bands = Math.max(10, Math.round(horizon / 15));
-    for (let i = 0; i < bands; i++) {
-      const y0 = Math.floor(horizon * i / bands), y1 = Math.floor(horizon * (i + 1) / bands);
-      const c = R.mix(sky.top, sky.bot, i / (bands - 1));
-      const c2 = R.mix(sky.top, sky.bot, Math.min(1, (i + 1) / (bands - 1)));
-      g.fillStyle = R.hex(c); g.fillRect(0, y0, W, y1 - y0);
-      g.fillStyle = R.hex(c2);
-      for (let y = y0; y < y1; y++) for (let x = (y & 1); x < W; x += 2) if (((y - y0) / (y1 - y0)) > 0.6 && ((x + y) % 4 === 0)) g.fillRect(x, y, 1, 1);
+    // the banded, dithered sky is cached on an offscreen canvas and only redrawn when its colours change (it is per-pixel work on a big canvas)
+    const bandCols = [];
+    for (let i = 0; i < bands; i++) bandCols.push(R.hex(R.mix(sky.top, sky.bot, i / (bands - 1))));
+    const skyKey = W + 'x' + horizon + bandCols.join();
+    if (!skyCache || skyCache.key !== skyKey) {
+      if (!skyCache) skyCache = { c: document.createElement('canvas') };
+      skyCache.key = skyKey; skyCache.c.width = W; skyCache.c.height = horizon;
+      const sg = skyCache.c.getContext('2d');
+      for (let i = 0; i < bands; i++) {
+        const y0 = Math.floor(horizon * i / bands), y1 = Math.floor(horizon * (i + 1) / bands);
+        const c2 = R.hex(R.mix(sky.top, sky.bot, Math.min(1, (i + 1) / (bands - 1))));
+        sg.fillStyle = bandCols[i]; sg.fillRect(0, y0, W, y1 - y0);
+        sg.fillStyle = c2;
+        for (let y = y0; y < y1; y++) for (let x = (y & 1); x < W; x += 2) if (((y - y0) / (y1 - y0)) > 0.6 && ((x + y) % 4 === 0)) sg.fillRect(x, y, 1, 1);
+      }
     }
+    g.drawImage(skyCache.c, 0, 0);
     // stars at night
     FX.setAmbient(sky.dark, horizon);
     if (sky.dark > 0.3 && !S.projects.p_milkyway) FX.skyStars(g, stars, horizon, sky.dark, t);
